@@ -1,0 +1,16 @@
+Collecting PySide6-Fluent-Widgets
+  Downloading pyside6_fluent_widgets-1.10.1-py3-none-any.whl.metadata (5.0 kB)
+Requirement already satisfied: PySide6>=6.4.2 in c:\users\¼Û¹ÎÁ¤\cursorprojects\free-trader\env\lib\site-packages (from PySide6-Fluent-Widgets) (6.7.3)
+Collecting PySideSix-Frameless-Window>=0.4.0 (from PySide6-Fluent-Widgets)
+  Downloading pysidesix_frameless_window-0.7.4-py3-none-any.whl.metadata (5.5 kB)
+Requirement already satisfied: darkdetect in c:\users\¼Û¹ÎÁ¤\cursorprojects\free-trader\env\lib\site-packages (from PySide6-Fluent-Widgets) (0.8.0)
+Requirement already satisfied: shiboken6==6.7.3 in c:\users\¼Û¹ÎÁ¤\cursorprojects\free-trader\env\lib\site-packages (from PySide6>=6.4.2->PySide6-Fluent-Widgets) (6.7.3)
+Requirement already satisfied: PySide6-Essentials==6.7.3 in c:\users\¼Û¹ÎÁ¤\cursorprojects\free-trader\env\lib\site-packages (from PySide6>=6.4.2->PySide6-Fluent-Widgets) (6.7.3)
+Requirement already satisfied: PySide6-Addons==6.7.3 in c:\users\¼Û¹ÎÁ¤\cursorprojects\free-trader\env\lib\site-packages (from PySide6>=6.4.2->PySide6-Fluent-Widgets) (6.7.3)
+Requirement already satisfied: pywin32 in c:\users\¼Û¹ÎÁ¤\cursorprojects\free-trader\env\lib\site-packages (from PySideSix-Frameless-Window>=0.4.0->PySide6-Fluent-Widgets) (311)
+Downloading pyside6_fluent_widgets-1.10.1-py3-none-any.whl (1.5 MB)
+   ---------------------------------------- 1.5/1.5 MB 16.5 MB/s  0:00:00
+Downloading pysidesix_frameless_window-0.7.4-py3-none-any.whl (30 kB)
+Installing collected packages: PySideSix-Frameless-Window, PySide6-Fluent-Widgets
+
+Successfully installed PySide6-Fluent-Widgets-1.10.1 PySideSix-Frameless-Window-0.7.4

@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 가상환경
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 환경 변수
+.env
+.env.local
+
+# 데이터베이스
+*.db
+*.sqlite
+*.sqlite3
+
+# 로그
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 빌드 파일
+build/
+dist/
+*.egg-info/
+
+# 테스트
+.pytest_cache/
+.coverage
+htmlcov/
+
+# API 키 및 설정 (중요!)
+config/secrets.json
+api_keys.txt
+
