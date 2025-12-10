@@ -2,10 +2,23 @@
 애플리케이션 전역 설정
 """
 import os
+import sys
 from pathlib import Path
 
+
+def get_app_dir():
+    """애플리케이션 디렉토리 경로 반환"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller로 실행 중 (exe)
+        # 실행 파일이 있는 폴더
+        return Path(sys.executable).parent
+    else:
+        # 개발 환경 (Python 스크립트)
+        return Path(__file__).parent.parent.absolute()
+
+
 # 프로젝트 루트 경로
-PROJECT_ROOT = Path(__file__).parent.parent.absolute()
+PROJECT_ROOT = get_app_dir()
 
 # 데이터 디렉토리
 DATA_DIR = PROJECT_ROOT / "data"
@@ -26,7 +39,7 @@ TIMEZONE = "Asia/Seoul"
 
 # OKX 설정
 OKX_BASE_URL = "https://www.okx.com"
-OKX_API_BASE = "https://www.okx.com/api/v5"
+OKX_API_BASE = "https://www.okx.com"
 OKX_WS_PUBLIC = "wss://ws.okx.com:8443/ws/v5/public"
 OKX_WS_PRIVATE = "wss://ws.okx.com:8443/ws/v5/private"
 OKX_WS_BUSINESS = "wss://ws.okx.com:8443/ws/v5/business"

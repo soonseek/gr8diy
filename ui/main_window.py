@@ -2,10 +2,10 @@
 메인 윈도우
 """
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget, QLabel
 )
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QFont
 from qfluentwidgets import (
     NavigationInterface, NavigationItemPosition, 
     FluentIcon, setTheme, Theme, isDarkTheme
@@ -46,6 +46,10 @@ class MainWindow(QMainWindow):
         content_layout.setContentsMargins(10, 10, 10, 10)
         content_layout.setSpacing(10)
         
+        # 헤더 영역
+        header_widget = self._create_header()
+        content_layout.addWidget(header_widget)
+        
         # 스택 위젯 (페이지 전환용)
         self.stack_widget = QStackedWidget()
         content_layout.addWidget(self.stack_widget, stretch=3)
@@ -72,6 +76,33 @@ class MainWindow(QMainWindow):
         self._connect_logger()
         
         logger.info("UI", "메인 윈도우 초기화 완료")
+    
+    def _create_header(self):
+        """헤더 위젯 생성"""
+        header = QWidget()
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(15, 10, 15, 10)
+        
+        # 브랜딩 로고 텍스트
+        logo_label = QLabel("프리트레이더 DIY 패키지")
+        logo_font = QFont()
+        logo_font.setPointSize(16)
+        logo_font.setBold(True)
+        logo_label.setFont(logo_font)
+        logo_label.setStyleSheet("color: #0078D4;")  # 브랜드 컬러
+        
+        header_layout.addWidget(logo_label)
+        header_layout.addStretch()
+        
+        # 헤더에 구분선 스타일 추가
+        header.setStyleSheet("""
+            QWidget {
+                background-color: transparent;
+                border-bottom: 2px solid #E0E0E0;
+            }
+        """)
+        
+        return header
     
     def _init_pages(self):
         """페이지 초기화"""

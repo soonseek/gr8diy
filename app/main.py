@@ -2,6 +2,7 @@
 OKX Trading Bot - 메인 진입점
 """
 import sys
+import traceback
 from pathlib import Path
 
 # 프로젝트 루트를 sys.path에 추가
@@ -18,18 +19,37 @@ from config.settings import DB_PATH
 from utils.logger import logger
 
 
+def exception_hook(exc_type, exc_value, exc_traceback):
+    """전역 예외 핸들러"""
+    # 로거가 아직 초기화되지 않았을 수도 있으므로 체크
+    if exc_type == KeyboardInterrupt:
+        # Ctrl+C는 정상 종료
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    
+    error_msg = f"{exc_type.__name__}: {exc_value}"
+    tb_str = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    
+    # 로거로 전송
+    logger.error("System", error_msg, tb_str)
+    
+    # 콘솔에도 출력 (디버깅용)
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+
 def main():
     """앱 실행 함수"""
     print("=" * 60)
     print("OKX Trading Bot 시작")
     print("=" * 60)
     
-    # High DPI 지원
+    # 전역 예외 핸들러 설치
+    sys.excepthook = exception_hook
+    
+    # High DPI 지원 (PySide6/Qt6에서는 기본 활성화되므로 제거)
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
     
     app = QApplication(sys.argv)
     

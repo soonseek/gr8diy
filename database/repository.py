@@ -17,15 +17,32 @@ class BaseRepository:
     def execute_query(self, sql: str, params: tuple = ()) -> QSqlQuery:
         """쿼리 실행"""
         query = QSqlQuery(self.db)
-        query.prepare(sql)
         
-        for param in params:
-            query.addBindValue(param)
+        if params:
+            # 파라미터가 있으면 prepare + bind
+            if not query.prepare(sql):
+                logger.error("DB", f"쿼리 준비 실패: {query.lastError().text()}")
+                logger.error("DB", f"SQL: {sql}")
+                return query
+            
+            # positional binding
+            for i, param in enumerate(params):
+                query.bindValue(i, param)
+            
+            # prepared 쿼리 실행
+            success = query.exec()
+        else:
+            # 파라미터 없으면 직접 실행
+            success = query.exec(sql)
         
-        if not query.exec():
-            logger.error("DB", f"쿼리 실행 실패: {query.lastError().text()}")
-            logger.error("DB", f"SQL: {sql}")
-            logger.error("DB", f"Params: {params}")
+        if not success:
+            error_text = query.lastError().text()
+            # "not an error" 무시 (Qt의 알려진 이슈)
+            if "not an error" not in error_text.lower():
+                logger.error("DB", f"쿼리 실행 실패: {error_text}")
+                logger.error("DB", f"SQL: {sql}")
+                if params:
+                    logger.error("DB", f"Params: {params}")
         
         return query
     
@@ -130,22 +147,14 @@ class CandlesRepository(BaseRepository):
     
     def get_latest_timestamp(self, symbol: str, timeframe: str) -> Optional[str]:
         """최신 캔들 타임스탬프 조회"""
-        sql = """
-        SELECT timestamp FROM candles
-        WHERE symbol = ? AND timeframe = ?
-        ORDER BY timestamp DESC LIMIT 1
-        """
+        sql = "SELECT timestamp FROM candles WHERE symbol = ? AND timeframe = ? ORDER BY timestamp DESC LIMIT 1"
         result = self.fetch_one(sql, (symbol, timeframe))
         return result['timestamp'] if result else None
     
     def get_candles(self, symbol: str, timeframe: str, 
                    limit: int = 500) -> List[Dict]:
         """캔들 조회"""
-        sql = """
-        SELECT * FROM candles
-        WHERE symbol = ? AND timeframe = ?
-        ORDER BY timestamp DESC LIMIT ?
-        """
+        sql = "SELECT * FROM candles WHERE symbol = ? AND timeframe = ? ORDER BY timestamp DESC LIMIT ?"
         return self.fetch_all(sql, (symbol, timeframe, limit))
     
     def delete_old(self, days: int):

@@ -161,7 +161,10 @@ class SettingsPage(QWidget):
         
         guide_text = BodyLabel(
             "봇을 사용하기 위해서는 다음 설정이 필요합니다:\n\n"
-            "• Account mode = futures mode\n"
+            "• Account mode = 2, 3, 또는 4 (선물 거래 모드)\n"
+            "  - 2: Single-currency margin\n"
+            "  - 3: Multi-currency margin\n"
+            "  - 4: Portfolio margin\n"
             "• Position mode = Hedge mode (long_short_mode)\n\n"
             "아래 버튼으로 현재 설정을 확인하고 필요 시 자동 변경할 수 있습니다."
         )
@@ -382,7 +385,7 @@ class SettingsPage(QWidget):
         
         # 권장 설정과 비교
         need_fix = False
-        if acct_lv != "4":  # futures mode
+        if acct_lv not in ["2", "3", "4"]:  # 선물 거래 가능 모드
             self.account_mode_label.setStyleSheet("color: #e74c3c;")
             need_fix = True
         else:
@@ -411,8 +414,8 @@ class SettingsPage(QWidget):
         if not self.okx_client:
             return
         
-        # Account mode 변경 (futures mode)
-        success1 = self.okx_client.set_account_mode(acct_lv=4)
+        # Account mode 변경 (Single-currency margin mode)
+        success1 = self.okx_client.set_account_mode(acct_lv=2)
         
         # Position mode 변경 (hedge mode)
         success2 = self.okx_client.set_position_mode(pos_mode="long_short_mode")

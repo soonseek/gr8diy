@@ -2,12 +2,12 @@
 로그 위젯 (하단 시스템 로그)
 """
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton
+    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QStackedWidget
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCursor, QColor
 from qfluentwidgets import (
-    PushButton, ComboBox, TitleLabel
+    PushButton, ComboBox, TitleLabel, Pivot
 )
 from utils.logger import INFO, WARNING, ERROR, CRITICAL
 from config.settings import LOG_VIEW_MAX_LINES
@@ -18,8 +18,8 @@ class LogWidget(QWidget):
     
     def __init__(self):
         super().__init__()
+        self.error_count = 0
         self._init_ui()
-        self.log_level_filter = "ALL"
     
     def _init_ui(self):
         """UI 초기화"""
@@ -35,12 +35,6 @@ class LogWidget(QWidget):
         
         control_layout.addStretch()
         
-        # 필터 콤보박스
-        self.level_combo = ComboBox()
-        self.level_combo.addItems(["ALL", "INFO", "WARNING", "ERROR"])
-        self.level_combo.currentTextChanged.connect(self._on_filter_changed)
-        control_layout.addWidget(self.level_combo)
-        
         # 클리어 버튼
         clear_btn = PushButton("Clear")
         clear_btn.clicked.connect(self.clear_logs)
@@ -48,20 +42,43 @@ class LogWidget(QWidget):
         
         layout.addLayout(control_layout)
         
-        # 로그 텍스트
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-        # PySide6에서는 document()를 통해 설정
-        self.log_text.document().setMaximumBlockCount(LOG_VIEW_MAX_LINES)
-        layout.addWidget(self.log_text)
+        # Pivot (탭)
+        self.pivot = Pivot(self)
+        self.stack_widget = QStackedWidget(self)
+        
+        # 전체 로그 텍스트
+        self.all_log_text = QTextEdit()
+        self.all_log_text.setReadOnly(True)
+        self.all_log_text.document().setMaximumBlockCount(LOG_VIEW_MAX_LINES)
+        
+        # 에러 전용 로그 텍스트
+        self.error_log_text = QTextEdit()
+        self.error_log_text.setReadOnly(True)
+        self.error_log_text.document().setMaximumBlockCount(LOG_VIEW_MAX_LINES)
+        
+        # 스택 위젯에 추가
+        self.stack_widget.addWidget(self.all_log_text)
+        self.stack_widget.addWidget(self.error_log_text)
+        
+        # Pivot 아이템 추가
+        self.pivot.addItem(
+            routeKey="all",
+            text="전체 로그",
+            onClick=lambda: self.stack_widget.setCurrentIndex(0)
+        )
+        self.pivot.addItem(
+            routeKey="errors",
+            text="에러",
+            onClick=lambda: self.stack_widget.setCurrentIndex(1)
+        )
+        
+        layout.addWidget(self.pivot)
+        layout.addWidget(self.stack_widget)
     
     def add_log(self, timestamp: str, level: int, module: str, 
                 message: str, stacktrace: str = ""):
         """로그 추가"""
-        # 레벨 필터링
         level_name = self._get_level_name(level)
-        if self.log_level_filter != "ALL" and level_name != self.log_level_filter:
-            return
         
         # 로그 포맷
         log_line = f"[{timestamp}] [{level_name}] [{module}] {message}"
@@ -69,23 +86,37 @@ class LogWidget(QWidget):
         # 색상 설정
         color = self._get_level_color(level)
         
-        # 텍스트 추가
-        self.log_text.setTextColor(color)
-        self.log_text.append(log_line)
-        
+        # 전체 로그에 추가
+        self.all_log_text.setTextColor(color)
+        self.all_log_text.append(log_line)
         if stacktrace:
-            self.log_text.append(f"  {stacktrace}")
+            self.all_log_text.append(f"  {stacktrace}")
+        self.all_log_text.moveCursor(QTextCursor.End)
         
-        # 스크롤을 맨 아래로
-        self.log_text.moveCursor(QTextCursor.End)
+        # 에러 로그에도 추가 (ERROR 이상만)
+        if level >= ERROR:
+            self.error_count += 1
+            self._update_error_tab_title()
+            
+            self.error_log_text.setTextColor(color)
+            self.error_log_text.append(log_line)
+            if stacktrace:
+                self.error_log_text.append(f"  {stacktrace}")
+            self.error_log_text.moveCursor(QTextCursor.End)
     
     def clear_logs(self):
         """로그 클리어"""
-        self.log_text.clear()
+        self.all_log_text.clear()
+        self.error_log_text.clear()
+        self.error_count = 0
+        self._update_error_tab_title()
     
-    def _on_filter_changed(self, text: str):
-        """필터 변경"""
-        self.log_level_filter = text
+    def _update_error_tab_title(self):
+        """에러 탭 제목 업데이트"""
+        # Pivot에서 직접 아이템을 찾아서 업데이트하는 것은 복잡하므로
+        # 간단하게 에러 카운트만 표시
+        # TODO: QFluentWidgets Pivot API를 사용하여 동적 업데이트 구현
+        pass
     
     @staticmethod
     def _get_level_name(level: int) -> str:

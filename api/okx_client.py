@@ -98,7 +98,13 @@ class OKXClient:
         self._wait_for_rate_limit()
         
         url = self.base_url + endpoint
-        request_path = endpoint
+        
+        # GET 요청의 경우 query parameter를 request_path에 포함
+        if method == "GET" and params:
+            query_string = "&".join([f"{k}={v}" for k, v in params.items()])
+            request_path = f"{endpoint}?{query_string}"
+        else:
+            request_path = endpoint
         
         body = ""
         if data:
@@ -125,7 +131,21 @@ class OKXClient:
             result = response.json()
             
             if result.get('code') != '0':
-                logger.error("OKX", f"API 오류: {result.get('msg')} (code: {result.get('code')})")
+                error_msg = result.get('msg', 'Unknown error')
+                error_code = result.get('code', 'Unknown')
+                error_data = result.get('data', [])
+                
+                logger.error("OKX", f"API 오류: {error_msg} (code: {error_code})")
+                
+                # 상세 오류 정보 로깅
+                if error_data:
+                    for item in error_data:
+                        if isinstance(item, dict):
+                            item_code = item.get('sCode', '')
+                            item_msg = item.get('sMsg', '')
+                            if item_code or item_msg:
+                                logger.error("OKX", f"상세: {item_msg} (sCode: {item_code})")
+                
                 return None
             
             return result
@@ -233,8 +253,7 @@ class OKXClient:
     def place_order(self, inst_id: str, side: str, ord_type: str,
                    sz: float, px: float = None, pos_side: str = None,
                    td_mode: str = "isolated", reduce_only: bool = False,
-                   tp_trigger_px: str = None, tp_ord_px: str = None,
-                   sl_trigger_px: str = None, sl_ord_px: str = None,
+                   attach_algo_ords: list = None,
                    cl_ord_id: str = None) -> Optional[Dict]:
         """
         주문 생성
@@ -259,12 +278,8 @@ class OKXClient:
             data["posSide"] = pos_side
         if reduce_only:
             data["reduceOnly"] = "true"
-        if tp_trigger_px:
-            data["tpTriggerPx"] = str(tp_trigger_px)
-            data["tpOrdPx"] = str(tp_ord_px) if tp_ord_px else "-1"
-        if sl_trigger_px:
-            data["slTriggerPx"] = str(sl_trigger_px)
-            data["slOrdPx"] = str(sl_ord_px) if sl_ord_px else "-1"
+        if attach_algo_ords:
+            data["attachAlgoOrds"] = attach_algo_ords
         if cl_ord_id:
             data["clOrdId"] = cl_ord_id
         

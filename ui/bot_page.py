@@ -37,21 +37,33 @@ class BotPage(QWidget):
         self.monitoring_widget = BotMonitoringWidget()
         self.history_widget = BotHistoryWidget()
         
-        # Pivot 아이템 추가
+        # Pivot 아이템 추가 및 워커 공유 설정
+        def switch_to_conditions():
+            self.stack_widget.setCurrentIndex(0)
+        
+        def switch_to_monitoring():
+            self.stack_widget.setCurrentIndex(1)
+            # 봇 워커 참조 업데이트
+            if hasattr(self.conditions_widget, 'bot_workers'):
+                self.monitoring_widget.set_bot_workers(self.conditions_widget.bot_workers)
+        
+        def switch_to_history():
+            self.stack_widget.setCurrentIndex(2)
+        
         self.pivot.addItem(
             routeKey="conditions",
             text="조건설정",
-            onClick=lambda: self.stack_widget.setCurrentIndex(0)
+            onClick=switch_to_conditions
         )
         self.pivot.addItem(
             routeKey="monitoring",
             text="모니터링",
-            onClick=lambda: self.stack_widget.setCurrentIndex(1)
+            onClick=switch_to_monitoring
         )
         self.pivot.addItem(
             routeKey="history",
             text="내역",
-            onClick=lambda: self.stack_widget.setCurrentIndex(2)
+            onClick=switch_to_history
         )
         
         # 스택 위젯에 추가
