@@ -13,26 +13,41 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        # PySide6 플러그인
-        ('env/Lib/site-packages/PySide6/plugins', 'PySide6/plugins'),
-        # 설정 파일들 (필요 시)
-        # ('config/*.py', 'config'),
+        # PySide6 플러그인은 자동 수집되도록 주석 처리 (한글 경로 문제 회피)
+        # ('env/Lib/site-packages/PySide6/plugins', 'PySide6/plugins'),
     ],
     hiddenimports=[
         'PySide6.QtCore',
         'PySide6.QtGui',
         'PySide6.QtWidgets',
         'PySide6.QtSql',
+        'PySide6.QtNetwork',
         'qfluentwidgets',
         'cryptography',
         'requests',
         'numpy',
         'pandas',
+        'markdown',
+        'markdown.extensions',
+        'markdown.extensions.extra',
+        'markdown.extensions.codehilite',
+        'markdown.extensions.toc',
+        'markdown.extensions.fenced_code',
     ],
     hookspath=[],
-    hooksconfig={},
+    hooksconfig={
+        'pyside6': {
+            'plugins': ['platforms', 'sqldrivers', 'styles'],
+        }
+    },
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'PyQt5',
+        'PyQt6', 
+        'PySide2',
+        'tkinter',
+        '_tkinter',
+    ],  # 불필요한 Qt 바인딩 제외
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -46,7 +61,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='OKX_Trading_Bot',
+    name='Gr8 DIY',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -68,6 +83,6 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='OKX_Trading_Bot',
+    name='Gr8 DIY',
 )
 

@@ -2,7 +2,7 @@
 chcp 65001 > nul
 cls
 echo ========================================
-echo OKX Trading Bot Starting...
+echo Gr8 DIY Starting...
 echo ========================================
 echo.
 

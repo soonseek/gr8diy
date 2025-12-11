@@ -33,14 +33,18 @@ class SettingsPage(QWidget):
     def _init_ui(self):
         """UI 초기화"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(15, 10, 10, 10)
         
         # 타이틀
         title = TitleLabel("설정")
         layout.addWidget(title)
         
-        # Pivot (탭)
+        # Pivot (탭) - 좌측 정렬
+        pivot_layout = QHBoxLayout()
         self.pivot = Pivot(self)
+        pivot_layout.addWidget(self.pivot)
+        pivot_layout.addStretch()
+        
         self.stack_widget = QStackedWidget(self)
         
         # 기본 연동 탭
@@ -65,15 +69,19 @@ class SettingsPage(QWidget):
         self.stack_widget.addWidget(self.credentials_widget)
         self.stack_widget.addWidget(self.exchange_widget)
         
-        layout.addWidget(self.pivot)
+        layout.addLayout(pivot_layout)
         layout.addWidget(self.stack_widget)
         layout.addStretch()
+        
+        # 기본 탭 선택
+        self.pivot.setCurrentItem("credentials")
     
     def _create_credentials_widget(self) -> QWidget:
         """기본 연동 위젯"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(20)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(15)
         
         # OKX 카드
         okx_card = CardWidget()
@@ -150,6 +158,7 @@ class SettingsPage(QWidget):
         """거래소 설정 위젯"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(20)
         
         # 안내 카드

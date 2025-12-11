@@ -3,12 +3,12 @@
 """
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QTableWidget,
-    QTableWidgetItem, QHeaderView, QStackedWidget
+    QTableWidgetItem, QHeaderView, QStackedWidget, QScrollArea, QDateEdit
 )
 from PySide6.QtCore import Qt, QDate, QThread
 from qfluentwidgets import (
     CardWidget, TitleLabel, SubtitleLabel, BodyLabel,
-    PushButton, DatePicker, SwitchButton, CheckBox, ProgressBar,
+    PushButton, SwitchButton, CheckBox, ProgressBar,
     InfoBar, InfoBarPosition, Pivot
 )
 from datetime import datetime, timedelta
@@ -45,15 +45,19 @@ class DataPage(QWidget):
     def _init_ui(self):
         """UI 초기화"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+        layout.setContentsMargins(15, 10, 10, 10)
+        layout.setSpacing(15)
         
         # 타이틀
         title = TitleLabel("데이터 수집")
         layout.addWidget(title)
         
-        # Pivot (탭)
+        # Pivot (탭) - 좌측 정렬
+        pivot_layout = QHBoxLayout()
         self.pivot = Pivot(self)
+        pivot_layout.addWidget(self.pivot)
+        pivot_layout.addStretch()
+        
         self.stack_widget = QStackedWidget(self)
         
         # 설정 탭
@@ -78,14 +82,24 @@ class DataPage(QWidget):
         self.stack_widget.addWidget(settings_widget)
         self.stack_widget.addWidget(data_view_widget)
         
-        layout.addWidget(self.pivot)
+        layout.addLayout(pivot_layout)
         layout.addWidget(self.stack_widget)
+        
+        # 기본 탭 선택
+        self.pivot.setCurrentItem("settings")
     
     def _create_settings_widget(self) -> QWidget:
         """설정 위젯 생성"""
+        # 스크롤 영역
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+        
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(20)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(15)
         
         # 수집 설정 카드
         collection_card = CardWidget()
@@ -95,14 +109,22 @@ class DataPage(QWidget):
         collection_layout.addWidget(subtitle)
         
         # 시작 날짜 설정
-        form_layout = QFormLayout()
+        date_layout = QHBoxLayout()
+        date_label = BodyLabel("수집 시작 일시:")
+        date_label.setFixedWidth(120)
+        date_layout.addWidget(date_label, 0, Qt.AlignmentFlag.AlignVCenter)
         
-        self.start_date_picker = DatePicker()
+        self.start_date_picker = QDateEdit()
+        self.start_date_picker.setCalendarPopup(True)
+        self.start_date_picker.setDisplayFormat("yyyy-MM-dd")
+        self.start_date_picker.setMinimumHeight(40)
+        self.start_date_picker.setMinimumWidth(150)
         default_start = QDate.currentDate().addDays(-10)
         self.start_date_picker.setDate(default_start)
-        form_layout.addRow("수집 시작 일시:", self.start_date_picker)
+        date_layout.addWidget(self.start_date_picker, 0, Qt.AlignmentFlag.AlignVCenter)
+        date_layout.addStretch()
         
-        collection_layout.addLayout(form_layout)
+        collection_layout.addLayout(date_layout)
         
         # 안내 메시지
         info_text = BodyLabel(
@@ -146,7 +168,10 @@ class DataPage(QWidget):
         
         switch_layout = QHBoxLayout()
         switch_label = BodyLabel("실시간 최신화:")
+        switch_label.setMinimumWidth(120)
+        switch_label.setWordWrap(False)
         self.realtime_switch = SwitchButton()
+        self.realtime_switch.setMinimumHeight(40)
         self.realtime_switch.checkedChanged.connect(self._toggle_realtime)
         switch_layout.addWidget(switch_label)
         switch_layout.addWidget(self.realtime_switch)
@@ -181,13 +206,21 @@ class DataPage(QWidget):
         layout.addWidget(symbols_card)
         layout.addStretch()
         
-        return widget
+        scroll.setWidget(widget)
+        return scroll
     
     def _create_data_view_widget(self) -> QWidget:
         """데이터 조회 위젯 생성"""
+        # 스크롤 영역
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+        
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(20)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(15)
         
         # 데이터 조회 카드
         view_card = CardWidget()
@@ -211,7 +244,8 @@ class DataPage(QWidget):
         # 초기 데이터 로드
         self._refresh_data_table()
         
-        return widget
+        scroll.setWidget(widget)
+        return scroll
     
     def _start_data_collection(self):
         """데이터 수집 시작"""

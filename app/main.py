@@ -11,12 +11,8 @@ sys.path.insert(0, str(project_root))
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
-from qfluentwidgets import setTheme, Theme
 
-from ui.main_window import MainWindow
-from database.schema import DatabaseSchema
 from config.settings import DB_PATH
-from utils.logger import logger
 
 
 def exception_hook(exc_type, exc_value, exc_traceback):
@@ -30,8 +26,12 @@ def exception_hook(exc_type, exc_value, exc_traceback):
     error_msg = f"{exc_type.__name__}: {exc_value}"
     tb_str = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     
-    # 로거로 전송
-    logger.error("System", error_msg, tb_str)
+    # 로거로 전송 (logger가 import된 경우에만)
+    try:
+        from utils.logger import logger
+        logger.error("System", error_msg, tb_str)
+    except:
+        pass
     
     # 콘솔에도 출력 (디버깅용)
     sys.__excepthook__(exc_type, exc_value, exc_traceback)
@@ -40,21 +40,57 @@ def exception_hook(exc_type, exc_value, exc_traceback):
 def main():
     """앱 실행 함수"""
     print("=" * 60)
-    print("OKX Trading Bot 시작")
+    print("Gr8 DIY 시작")
     print("=" * 60)
     
     # 전역 예외 핸들러 설치
     sys.excepthook = exception_hook
     
-    # High DPI 지원 (PySide6/Qt6에서는 기본 활성화되므로 제거)
+    print("[DEBUG] Step 1: High DPI 설정 (QApplication 생성 전)")
+    # High DPI 지원 - QApplication 생성 전에 설정해야 함!
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
     
+    print("[DEBUG] Step 2: QApplication 생성 시작")
+    # QApplication 생성
     app = QApplication(sys.argv)
+    print(f"[DEBUG] Step 3: QApplication 생성 완료 - instance: {app}")
+    print(f"[DEBUG] Step 3-1: QApplication.instance() = {QApplication.instance()}")
     
-    # 테마 설정
-    setTheme(Theme.AUTO)
+    # Qt 플러그인 경로 추가 (SQL 드라이버 등을 위해)
+    from PySide6.QtCore import QCoreApplication
+    plugin_path = project_root / "env" / "Lib" / "site-packages" / "PySide6" / "plugins"
+    QCoreApplication.addLibraryPath(str(plugin_path))
+    print(f"[DEBUG] Step 3-1.5: Qt plugin path added: {plugin_path}")
+    
+    # QApplication 이벤트 루프 초기화 (중요!)
+    app.processEvents()
+    print("[DEBUG] Step 3-2: QApplication.processEvents() 완료")
+    
+    # 테마 설정을 위해 qfluentwidgets를 이제 import (QApplication 생성 이후)
+    print("[DEBUG] Step 4: qfluentwidgets import 시작")
+    import PySide6
+    from PySide6 import QtCore
+    from qfluentwidgets import setTheme, Theme, __version__ as qfw_version
+    print(f"[DEBUG] PySide6 version: {PySide6.__version__}, QtCore path: {QtCore.__file__}")
+    print(f"[DEBUG] qfluentwidgets version: {qfw_version}")
+    # Fluent 다크 테마 설정 (Gr8 DIY 커스텀 테마는 MainWindow에서 적용)
+    setTheme(Theme.DARK)
+    print("[DEBUG] Step 4-1: 다크 테마 설정 완료")
+    
+    # QApplication 생성 후 Qt 관련 모듈들 import
+    print("[DEBUG] Step 5: logger import 시작")
+    from utils.logger import logger
+    print("[DEBUG] Step 6: logger import 완료")
+    
+    print("[DEBUG] Step 7: DatabaseSchema import 시작")
+    from database.schema import DatabaseSchema
+    print("[DEBUG] Step 8: DatabaseSchema import 완료")
+    
+    print("[DEBUG] Step 9: MainWindow import 시작")
+    from ui.main_window import MainWindow
+    print("[DEBUG] Step 10: MainWindow import 완료")
     
     # 데이터베이스 초기화
     logger.info("Main", "데이터베이스 초기화 중...")
@@ -64,8 +100,11 @@ def main():
     
     # 메인 윈도우 생성
     logger.info("Main", "메인 윈도우 생성 중...")
+    print("[DEBUG] Step 11: MainWindow() 인스턴스 생성 시작")
     window = MainWindow()
+    print("[DEBUG] Step 12: MainWindow() 인스턴스 생성 완료")
     window.show()
+    print("[DEBUG] Step 13: window.show() 완료")
     
     logger.info("Main", "애플리케이션 시작 완료")
     

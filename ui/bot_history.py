@@ -3,11 +3,11 @@
 """
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
-    QTableWidgetItem, QHeaderView
+    QTableWidgetItem, QHeaderView, QDateEdit
 )
 from PySide6.QtCore import Qt
 from qfluentwidgets import (
-    CardWidget, SubtitleLabel, ComboBox, DatePicker, PushButton, BodyLabel
+    CardWidget, SubtitleLabel, ComboBox, PushButton, BodyLabel
 )
 
 from database.repository import TradesHistoryRepository
@@ -30,7 +30,8 @@ class BotHistoryWidget(QWidget):
     def _init_ui(self):
         """UI 초기화"""
         layout = QVBoxLayout(self)
-        layout.setSpacing(20)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(15)
         
         # 필터 카드
         filter_card = CardWidget()
@@ -43,11 +44,19 @@ class BotHistoryWidget(QWidget):
         self.period_combo.currentIndexChanged.connect(self._on_period_changed)
         filter_layout.addWidget(self.period_combo)
         
-        self.start_date_picker = DatePicker()
+        self.start_date_picker = QDateEdit()
+        self.start_date_picker.setCalendarPopup(True)
+        self.start_date_picker.setDisplayFormat("yyyy-MM-dd")
+        self.start_date_picker.setMinimumHeight(40)
+        self.start_date_picker.setMinimumWidth(150)
         self.start_date_picker.setVisible(False)
         filter_layout.addWidget(self.start_date_picker)
         
-        self.end_date_picker = DatePicker()
+        self.end_date_picker = QDateEdit()
+        self.end_date_picker.setCalendarPopup(True)
+        self.end_date_picker.setDisplayFormat("yyyy-MM-dd")
+        self.end_date_picker.setMinimumHeight(40)
+        self.end_date_picker.setMinimumWidth(150)
         self.end_date_picker.setVisible(False)
         filter_layout.addWidget(self.end_date_picker)
         
@@ -101,8 +110,8 @@ class BotHistoryWidget(QWidget):
             elif period == "이번 달":
                 start_date = time_helper.format_kst(time_helper.now_kst() - timedelta(days=30))
             elif period == "사용자 지정":
-                start_qdate = self.start_date_picker.getDate()
-                end_qdate = self.end_date_picker.getDate()
+                start_qdate = self.start_date_picker.date()
+                end_qdate = self.end_date_picker.date()
                 start_date = f"{start_qdate.year()}-{start_qdate.month():02d}-{start_qdate.day():02d}"
                 end_date = f"{end_qdate.year()}-{end_qdate.month():02d}-{end_qdate.day():02d}"
             

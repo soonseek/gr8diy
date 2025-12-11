@@ -1,10 +1,10 @@
 # PySide6 Trading Bot - 필수 패키지 목록
 
-# GUI 프레임워크
-PySide6>=6.6.0,<6.8.0
+# GUI 프레임워크 (qfluentwidgets 1.5.1 호환 버전)
+PySide6==6.4.2
 
-# Modern Qt UI 컴포넌트 (PySide6용!)
-PySide6-Fluent-Widgets>=1.5.0
+# Modern Qt UI 컴포넌트 (PySide6 6.4.2와 호환)
+PySide6-Fluent-Widgets==1.5.1
 
 # HTTP 요청
 requests>=2.31.0
@@ -30,3 +30,6 @@ numpy>=1.24.0
 
 # HTTP 클라이언트 (OKX API)
 aiohttp>=3.9.0
+
+# Markdown 처리
+markdown>=3.5.0

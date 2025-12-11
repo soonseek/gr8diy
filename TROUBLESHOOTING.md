@@ -31,11 +31,13 @@ python --version
 
 ```txt
 # 올바른 패키지 이름
-PyQt-Fluent-Widgets>=1.5.0
+PySide6==6.4.2
+PySide6-Fluent-Widgets==1.5.1
+numpy<2
 ```
 
-❌ 잘못된 이름: `QFluentWidgets`  
-✅ 올바른 이름: `PyQt-Fluent-Widgets`
+❌ 잘못된 조합: `PySide6>=6.6.0` + `QFluentWidgets`  
+✅ 올바른 조합: `PySide6==6.4.2` + `PySide6-Fluent-Widgets==1.5.1` + `numpy<2`
 
 #### 3단계: 수동으로 재설치
 
@@ -55,10 +57,11 @@ env\Scripts\activate
 # pip 업그레이드
 python -m pip install --upgrade pip
 
-# 패키지 개별 설치
-pip install PySide6==6.7.2
-pip install PyQt-Fluent-Widgets
-pip install requests websockets openai python-dotenv pytz cryptography pandas numpy aiohttp
+# 패키지 개별 설치 (호환 버전)
+pip install "PySide6==6.4.2"
+pip install "PySide6-Fluent-Widgets==1.5.1"
+pip install "numpy<2"
+pip install requests websockets openai python-dotenv pytz cryptography pandas aiohttp
 
 # 설치 확인
 pip list

@@ -41,7 +41,8 @@ class BotMonitoringWidget(QWidget):
     def _init_ui(self):
         """UI 초기화"""
         layout = QVBoxLayout(self)
-        layout.setSpacing(20)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(15)
         
         # 타이틀 및 컨트롤
         title_layout = QHBoxLayout()

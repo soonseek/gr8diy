@@ -47,11 +47,13 @@ class BotConditionsWidget(QWidget):
         # 스크롤 영역
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
         
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.setSpacing(20)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(15)
         
         # 종목 설정 카드
         symbol_card = CardWidget()
@@ -68,10 +70,12 @@ class BotConditionsWidget(QWidget):
                 f"💰 계정 가용 증거금: {self.available_margin:.2f} USDT\n"
                 f"📊 심볼당 권장 증거금: {self.available_margin / 5:.2f} USDT (5개 균등 분배)"
             )
+            self.balance_info.setWordWrap(True)
             self.balance_info.setStyleSheet("color: #2ecc71; font-weight: bold;")
             balance_layout.addWidget(self.balance_info)
         else:
             self.balance_info = BodyLabel("⚠ 가용 증거금을 조회할 수 없습니다")
+            self.balance_info.setWordWrap(True)
             self.balance_info.setStyleSheet("color: #e74c3c;")
             balance_layout.addWidget(self.balance_info)
         
@@ -244,6 +248,15 @@ class BotConditionsWidget(QWidget):
         martin_info.setStyleSheet("color: #7f8c8d;")
         martin_layout.addWidget(martin_info)
         
+        # 익절/레버리지 관계 설명
+        leverage_info = BodyLabel(
+            "💡 익절 계산 공식: 실제 익절 PnL(%) = 오프셋(%) × 레버리지\n"
+            "   예) 오프셋 1% + 레버리지 10배 = PnL 약 10% 부근에서 익절\n"
+            "   예) 오프셋 2% + 레버리지 5배 = PnL 약 10% 부근에서 익절"
+        )
+        leverage_info.setStyleSheet("color: #00d4ff; font-size: 12px;")
+        martin_layout.addWidget(leverage_info)
+        
         layout.addWidget(martin_card)
         
         # 익절/손절 설정 카드
@@ -257,7 +270,7 @@ class BotConditionsWidget(QWidget):
         
         self.tp_offset_spin = DoubleSpinBox()
         self.tp_offset_spin.setRange(0.1, 100.0)
-        self.tp_offset_spin.setValue(3.0)
+        self.tp_offset_spin.setValue(1.0)  # 기본값 1%
         self.tp_offset_spin.setSuffix(" %")
         tp_sl_form.addRow("익절 오프셋 (필수):", self.tp_offset_spin)
         

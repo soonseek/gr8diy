@@ -2,7 +2,7 @@
 로그 위젯 (하단 시스템 로그)
 """
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QStackedWidget
+    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QStackedWidget, QApplication
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCursor, QColor
@@ -17,9 +17,21 @@ class LogWidget(QWidget):
     """시스템 로그 위젯"""
     
     def __init__(self):
-        super().__init__()
+        import traceback
+        print(f"[DEBUG-LW] QApplication.instance() at LogWidget init (before super): {QApplication.instance()}")
+        try:
+            super().__init__()
+        except Exception:
+            print("[DEBUG-LW-ERROR] super().__init__ 실패")
+            traceback.print_exc()
+            raise
         self.error_count = 0
-        self._init_ui()
+        try:
+            self._init_ui()
+        except Exception:
+            print("[DEBUG-LW-ERROR] _init_ui 실패")
+            traceback.print_exc()
+            raise
     
     def _init_ui(self):
         """UI 초기화"""
@@ -42,8 +54,12 @@ class LogWidget(QWidget):
         
         layout.addLayout(control_layout)
         
-        # Pivot (탭)
+        # Pivot (탭) - 좌측 정렬
+        pivot_layout = QHBoxLayout()
         self.pivot = Pivot(self)
+        pivot_layout.addWidget(self.pivot)
+        pivot_layout.addStretch()
+        
         self.stack_widget = QStackedWidget(self)
         
         # 전체 로그 텍스트
@@ -72,8 +88,11 @@ class LogWidget(QWidget):
             onClick=lambda: self.stack_widget.setCurrentIndex(1)
         )
         
-        layout.addWidget(self.pivot)
+        layout.addLayout(pivot_layout)
         layout.addWidget(self.stack_widget)
+        
+        # 기본 탭 선택
+        self.pivot.setCurrentItem("all")
     
     def add_log(self, timestamp: str, level: int, module: str, 
                 message: str, stacktrace: str = ""):

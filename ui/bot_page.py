@@ -1,7 +1,7 @@
 """
 봇 페이지 (조건설정, 모니터링, 내역)
 """
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QStackedWidget
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget
 from PySide6.QtCore import Qt
 from qfluentwidgets import (
     Pivot, TitleLabel
@@ -22,14 +22,18 @@ class BotPage(QWidget):
     def _init_ui(self):
         """UI 초기화"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(15, 10, 10, 10)
         
         # 타이틀
         title = TitleLabel("자동매매 봇")
         layout.addWidget(title)
         
-        # Pivot (탭)
+        # Pivot (탭) - 좌측 정렬
+        pivot_layout = QHBoxLayout()
         self.pivot = Pivot(self)
+        pivot_layout.addWidget(self.pivot)
+        pivot_layout.addStretch()
+        
         self.stack_widget = QStackedWidget(self)
         
         # 하위 위젯들
@@ -71,7 +75,10 @@ class BotPage(QWidget):
         self.stack_widget.addWidget(self.monitoring_widget)
         self.stack_widget.addWidget(self.history_widget)
         
-        layout.addWidget(self.pivot)
+        layout.addLayout(pivot_layout)
         layout.addWidget(self.stack_widget)
+        
+        # 기본 탭 선택
+        self.pivot.setCurrentItem("conditions")
 
 
