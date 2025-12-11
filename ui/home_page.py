@@ -1,6 +1,8 @@
 """
 홈 페이지 - README 및 가이드 표시
 """
+import sys
+import os
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTextBrowser, QStackedWidget
 from PySide6.QtCore import Qt
 from qfluentwidgets import Pivot
@@ -10,6 +12,17 @@ try:
     MARKDOWN_AVAILABLE = True
 except ImportError:
     MARKDOWN_AVAILABLE = False
+
+
+def get_resource_path(filename):
+    """PyInstaller 환경에서 리소스 파일 경로 반환"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller로 패키징된 경우
+        base_path = sys._MEIPASS
+    else:
+        # 개발 환경
+        base_path = Path(__file__).parent.parent
+    return Path(base_path) / filename
 
 
 class HomePage(QWidget):
@@ -103,8 +116,8 @@ class HomePage(QWidget):
     
     def _load_contents(self):
         """모든 콘텐츠 로드"""
-        readme_path = Path(__file__).parent.parent / "README.md"
-        setup_path = Path(__file__).parent.parent / "README_SETUP_ko.md"
+        readme_path = get_resource_path("README.md")
+        setup_path = get_resource_path("README_SETUP_ko.md")
         
         # README 전체 내용 읽기
         if readme_path.exists():
