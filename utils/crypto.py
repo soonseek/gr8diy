@@ -104,5 +104,81 @@ class CredentialManager:
         creds = self.load_credentials()
         creds["gpt_api_key"] = api_key
         self.save_credentials(creds)
+    
+    # ========== 멀티 거래소 지원 ==========
+    
+    def get_exchange_credentials(self, exchange_id: str, is_testnet: bool = False) -> dict:
+        """
+        거래소별 자격증명 조회
+        
+        Args:
+            exchange_id: 거래소 ID (binance, bybit, okx 등)
+            is_testnet: 테스트넷 여부
+        
+        Returns:
+            {api_key, secret, passphrase}
+        """
+        creds = self.load_credentials()
+        prefix = f"{exchange_id}_testnet" if is_testnet else exchange_id
+        
+        return {
+            "api_key": creds.get(f"{prefix}_api_key", ""),
+            "secret": creds.get(f"{prefix}_secret", ""),
+            "passphrase": creds.get(f"{prefix}_passphrase", "")
+        }
+    
+    def save_exchange_credentials(self, exchange_id: str, api_key: str, 
+                                  secret: str, passphrase: str = "",
+                                  is_testnet: bool = False):
+        """
+        거래소별 자격증명 저장
+        
+        Args:
+            exchange_id: 거래소 ID
+            api_key: API 키
+            secret: 시크릿
+            passphrase: 패스프레이즈 (선택)
+            is_testnet: 테스트넷 여부
+        """
+        creds = self.load_credentials()
+        prefix = f"{exchange_id}_testnet" if is_testnet else exchange_id
+        
+        creds[f"{prefix}_api_key"] = api_key
+        creds[f"{prefix}_secret"] = secret
+        creds[f"{prefix}_passphrase"] = passphrase
+        
+        self.save_credentials(creds)
+    
+    def delete_exchange_credentials(self, exchange_id: str, is_testnet: bool = False):
+        """
+        거래소별 자격증명 삭제
+        
+        Args:
+            exchange_id: 거래소 ID
+            is_testnet: 테스트넷 여부
+        """
+        creds = self.load_credentials()
+        prefix = f"{exchange_id}_testnet" if is_testnet else exchange_id
+        
+        keys_to_delete = [
+            f"{prefix}_api_key",
+            f"{prefix}_secret", 
+            f"{prefix}_passphrase"
+        ]
+        
+        for key in keys_to_delete:
+            if key in creds:
+                del creds[key]
+        
+        self.save_credentials(creds)
+    
+    def has_exchange_credentials(self, exchange_id: str, is_testnet: bool = False) -> bool:
+        """거래소 자격증명 존재 여부"""
+        creds = self.get_exchange_credentials(exchange_id, is_testnet)
+        return bool(creds.get('api_key') and creds.get('secret'))
+    
+    def save_gpt_credentials(self, api_key: str):
+        """GPT 자격증명 저장 (별칭)"""
+        self.update_gpt_credentials(api_key)
 
 

@@ -41,6 +41,9 @@ a = Analysis(
         'requests',
         'numpy',
         'pandas',
+        'ccxt',
+        'ccxt.base',
+        'ccxt.base.exchange',
         'markdown',
         'markdown.extensions',
         'markdown.extensions.extra',
@@ -85,7 +88,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Gr8 DIY',
+    name='Gr8 DIY v1.1',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -107,6 +110,6 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Gr8 DIY',
+    name='Gr8 DIY v1.1',
 )
 

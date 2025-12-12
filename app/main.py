@@ -2,12 +2,57 @@
 OKX Trading Bot - 메인 진입점
 """
 import sys
+import os
 import traceback
 from pathlib import Path
 
 # 프로젝트 루트를 sys.path에 추가
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+# Qt 플러그인 경로 설정 (QApplication 생성 전에 설정해야 함!)
+def _setup_qt_plugin_path():
+    """Qt 플러그인 경로를 Windows 환경에 맞게 설정"""
+    import importlib.util
+    
+    # PySide6 설치 경로 찾기
+    spec = importlib.util.find_spec("PySide6")
+    if spec and spec.origin:
+        pyside6_path = Path(spec.origin).parent
+    else:
+        pyside6_path = project_root / "env" / "Lib" / "site-packages" / "PySide6"
+    
+    plugins_path = pyside6_path / "plugins"
+    platforms_path = plugins_path / "platforms"
+    
+    if not platforms_path.exists():
+        print(f"[ERROR] Qt plugins path not found: {platforms_path}")
+        return False
+    
+    # 환경 변수 설정
+    os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = str(platforms_path)
+    os.environ["QT_PLUGIN_PATH"] = str(plugins_path)
+    
+    # Windows에서 DLL 검색 경로에 추가
+    if sys.platform == "win32":
+        # PATH에 PySide6 경로 추가
+        pyside6_str = str(pyside6_path)
+        current_path = os.environ.get("PATH", "")
+        if pyside6_str not in current_path:
+            os.environ["PATH"] = pyside6_str + os.pathsep + current_path
+        
+        # DLL 디렉토리 추가 (Python 3.8+)
+        if hasattr(os, 'add_dll_directory'):
+            try:
+                os.add_dll_directory(pyside6_str)
+                os.add_dll_directory(str(platforms_path))
+            except Exception:
+                pass
+    
+    print(f"[DEBUG] Qt plugin path set: {platforms_path}")
+    return True
+
+_setup_qt_plugin_path()
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt

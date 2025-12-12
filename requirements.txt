@@ -33,3 +33,6 @@ aiohttp>=3.9.0
 
 # Markdown 처리
 markdown>=3.5.0
+
+# CCXT - 멀티 거래소 지원
+ccxt>=4.0.0

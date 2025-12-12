@@ -1,21 +1,20 @@
 """
 Gr8 DIY - 커스텀 테마 시스템
-다크모드 + 네온 그린-블루 그라디언트
 """
 
 class Gr8Theme:
     """Gr8 DIY 커스텀 테마 색상 팔레트"""
     
     # === 배경색 ===
-    BG_DARK = "#0a0e27"           # 메인 배경 (진한 네이비)
-    BG_SECONDARY = "#1a1f3a"      # 카드/패널 배경
-    BG_TERTIARY = "#252b4a"       # 호버 배경
-    BG_INPUT = "#1e2338"          # 입력 필드 배경
+    BG_DARK = "#0a0e27"
+    BG_SECONDARY = "#1a1f3a"
+    BG_TERTIARY = "#252b4a"
+    BG_INPUT = "#1e2338"
     
     # === 네온 포인트 컬러 ===
-    NEON_GREEN = "#00ff9f"        # 형광 그린 (주 포인트)
-    NEON_BLUE = "#00d4ff"         # 사이버 블루 (보조 포인트)
-    NEON_PURPLE = "#b744ff"       # 네온 퍼플 (악센트)
+    NEON_GREEN = "#00ff9f"
+    NEON_BLUE = "#00d4ff"
+    NEON_PURPLE = "#b744ff"
     
     # === 그라디언트 ===
     GRADIENT_PRIMARY = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00ff9f, stop:1 #00d4ff)"
@@ -23,26 +22,21 @@ class Gr8Theme:
     GRADIENT_PRESSED = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00cc7f, stop:1 #00a8cc)"
     
     # === 텍스트 색상 ===
-    TEXT_PRIMARY = "#e8e8e8"      # 메인 텍스트
-    TEXT_SECONDARY = "#a0a0a0"    # 보조 텍스트
-    TEXT_DISABLED = "#606060"     # 비활성 텍스트
-    TEXT_ON_ACCENT = "#0a0e27"    # 강조색 위 텍스트 (어두운 배경)
+    TEXT_PRIMARY = "#e8e8e8"
+    TEXT_SECONDARY = "#a0a0a0"
+    TEXT_DISABLED = "#606060"
+    TEXT_ON_ACCENT = "#0a0e27"
     
-    # === 보더/구분선 ===
-    BORDER_DEFAULT = "#2a3050"    # 기본 보더
-    BORDER_FOCUS = "#00ff9f"      # 포커스 보더 (네온 그린)
-    BORDER_HOVER = "#00d4ff"      # 호버 보더 (사이버 블루)
+    # === 보더/구분선 (밝게!) ===
+    BORDER_DEFAULT = "#6a7090"
+    BORDER_FOCUS = "#00ff9f"
+    BORDER_HOVER = "#00d4ff"
     
     # === 상태 색상 ===
-    SUCCESS = "#00ff9f"           # 성공 (그린)
-    WARNING = "#ffaa00"           # 경고 (오렌지)
-    ERROR = "#ff4444"             # 에러 (레드)
-    INFO = "#00d4ff"              # 정보 (블루)
-    
-    # === 그림자 ===
-    SHADOW_LIGHT = "rgba(0, 255, 159, 0.2)"   # 그린 글로우
-    SHADOW_MEDIUM = "rgba(0, 212, 255, 0.3)"  # 블루 글로우
-    SHADOW_DARK = "rgba(0, 0, 0, 0.5)"        # 일반 그림자
+    SUCCESS = "#00ff9f"
+    WARNING = "#ffaa00"
+    ERROR = "#ff4444"
+    INFO = "#00d4ff"
 
 
 def get_custom_stylesheet():
@@ -52,7 +46,7 @@ def get_custom_stylesheet():
     /* ===== 전역 설정 ===== */
     * {{
         font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
-        font-size: 14px;
+        font-size: 13px;
     }}
     
     /* ===== 메인 윈도우 ===== */
@@ -67,50 +61,44 @@ def get_custom_stylesheet():
         color: {Gr8Theme.TEXT_PRIMARY};
     }}
     
-    /* ===== 카드/패널 (CardWidget) ===== */
-    CardWidget, QFrame {{
+    /* ===== 카드/패널 ===== */
+    CardWidget {{
         background-color: {Gr8Theme.BG_SECONDARY};
-        border: 1px solid {Gr8Theme.BORDER_DEFAULT};
+        border: 2px solid {Gr8Theme.BORDER_DEFAULT};
         border-radius: 8px;
         padding: 12px;
     }}
     
-    /* ===== 버튼 ===== */
-    PushButton, QPushButton {{
-        background: {Gr8Theme.GRADIENT_PRIMARY};
-        color: {Gr8Theme.TEXT_ON_ACCENT};
+    QFrame {{
+        background: transparent;
         border: none;
-        border-radius: 8px;
-        padding: 10px 24px;
+    }}
+    
+    /* ===== 버튼 (포인트 컬러!) ===== */
+    PushButton, QPushButton {{
+        background-color: {Gr8Theme.NEON_GREEN};
+        color: {Gr8Theme.TEXT_ON_ACCENT};
+        border: 2px solid {Gr8Theme.NEON_GREEN};
+        border-radius: 5px;
+        padding: 6px 14px;
         font-weight: bold;
-        font-size: 14px;
-        min-height: 36px;
+        font-size: 13px;
     }}
     
     PushButton:hover, QPushButton:hover {{
-        background: {Gr8Theme.GRADIENT_HOVER};
+        background-color: {Gr8Theme.NEON_BLUE};
+        border-color: {Gr8Theme.NEON_BLUE};
     }}
     
     PushButton:pressed, QPushButton:pressed {{
-        background: {Gr8Theme.GRADIENT_PRESSED};
-        padding: 11px 23px 9px 25px;
+        background-color: #00aa6f;
+        border-color: #00aa6f;
     }}
     
     PushButton:disabled, QPushButton:disabled {{
         background-color: {Gr8Theme.BG_TERTIARY};
+        border-color: {Gr8Theme.BG_TERTIARY};
         color: {Gr8Theme.TEXT_DISABLED};
-    }}
-    
-    /* ===== 보조 버튼 (아웃라인) ===== */
-    QPushButton[secondary="true"] {{
-        background-color: transparent;
-        color: {Gr8Theme.NEON_GREEN};
-        border: 2px solid {Gr8Theme.NEON_GREEN};
-    }}
-    
-    QPushButton[secondary="true"]:hover {{
-        background-color: {Gr8Theme.NEON_GREEN};
-        color: {Gr8Theme.TEXT_ON_ACCENT};
     }}
     
     /* ===== 입력 필드 ===== */
@@ -118,10 +106,8 @@ def get_custom_stylesheet():
         background-color: {Gr8Theme.BG_INPUT};
         color: {Gr8Theme.TEXT_PRIMARY};
         border: 2px solid {Gr8Theme.BORDER_DEFAULT};
-        border-radius: 8px;
-        padding: 10px 16px;
-        selection-background-color: {Gr8Theme.NEON_BLUE};
-        selection-color: {Gr8Theme.TEXT_ON_ACCENT};
+        border-radius: 5px;
+        padding: 6px 10px;
     }}
     
     LineEdit:focus, QLineEdit:focus, QTextEdit:focus {{
@@ -137,74 +123,94 @@ def get_custom_stylesheet():
         background-color: {Gr8Theme.BG_INPUT};
         color: {Gr8Theme.TEXT_PRIMARY};
         border: 2px solid {Gr8Theme.BORDER_DEFAULT};
-        border-radius: 8px;
-        padding: 10px 16px;
+        border-radius: 5px;
+        padding: 6px 10px;
     }}
     
     PasswordLineEdit:focus {{
         border: 2px solid {Gr8Theme.BORDER_FOCUS};
     }}
     
-    /* ===== 콤보박스 ===== */
-    ComboBox, QComboBox {{
-        background-color: {Gr8Theme.BG_INPUT};
-        color: {Gr8Theme.TEXT_PRIMARY};
-        border: 2px solid {Gr8Theme.BORDER_DEFAULT};
-        border-radius: 8px;
-        padding: 8px 16px;
-        min-height: 40px;
+    /* ===== 콤보박스/드롭다운 ===== */
+    ComboBox, ComboBox > QComboBox {{
+        background-color: {Gr8Theme.BG_INPUT} !important;
+        color: {Gr8Theme.TEXT_PRIMARY} !important;
+        border: 3px solid {Gr8Theme.NEON_GREEN} !important;
+        border-radius: 6px !important;
+        padding: 8px 12px !important;
+        padding-right: 38px !important;
+        min-height: 32px !important;
+        font-size: 13px !important;
     }}
     
-    /* ===== DateEdit (DatePicker) ===== */
+    ComboBox:hover, ComboBox > QComboBox:hover {{
+        border: 3px solid {Gr8Theme.NEON_BLUE} !important;
+        background-color: {Gr8Theme.BG_SECONDARY} !important;
+    }}
+    
+    QComboBox {{
+        background-color: {Gr8Theme.BG_INPUT} !important;
+        color: {Gr8Theme.TEXT_PRIMARY} !important;
+        border: 3px solid {Gr8Theme.NEON_GREEN} !important;
+        border-radius: 6px !important;
+        padding: 8px 12px !important;
+        padding-right: 38px !important;
+        min-height: 32px !important;
+        font-size: 13px !important;
+    }}
+    
+    QComboBox:hover {{
+        border: 3px solid {Gr8Theme.NEON_BLUE} !important;
+        background-color: {Gr8Theme.BG_SECONDARY} !important;
+    }}
+    
+    ComboBox::drop-down, ComboBox > QComboBox::drop-down, QComboBox::drop-down {{
+        subcontrol-origin: padding;
+        subcontrol-position: right center;
+        border: none;
+        border-left: 2px solid {Gr8Theme.BG_DARK};
+        width: 32px;
+        background-color: {Gr8Theme.NEON_GREEN} !important;
+        border-radius: 0 4px 4px 0;
+    }}
+    
+    ComboBox::down-arrow, ComboBox > QComboBox::down-arrow, QComboBox::down-arrow {{
+        image: none;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 8px solid {Gr8Theme.TEXT_ON_ACCENT};
+    }}
+    
+    /* ===== DateEdit ===== */
     QDateEdit {{
         background-color: {Gr8Theme.BG_INPUT};
         color: {Gr8Theme.TEXT_PRIMARY};
         border: 2px solid {Gr8Theme.BORDER_DEFAULT};
-        border-radius: 8px;
-        padding: 8px 16px;
-        min-height: 40px;
+        border-radius: 5px;
+        padding: 4px 8px;
+        font-size: 13px;
     }}
     
     QDateEdit:hover {{
-        border-color: {Gr8Theme.BORDER_HOVER};
+        border-color: {Gr8Theme.NEON_BLUE};
     }}
     
     QDateEdit:focus {{
-        border-color: {Gr8Theme.BORDER_FOCUS};
+        border-color: {Gr8Theme.NEON_GREEN};
     }}
     
     QDateEdit::drop-down {{
         border: none;
-        width: 30px;
+        width: 24px;
+        background-color: {Gr8Theme.NEON_GREEN};
+        border-radius: 0 3px 3px 0;
     }}
     
     QDateEdit::down-arrow {{
         image: none;
         border-left: 5px solid transparent;
         border-right: 5px solid transparent;
-        border-top: 6px solid {Gr8Theme.NEON_GREEN};
-        margin-right: 8px;
-    }}
-    
-    ComboBox:hover, QComboBox:hover {{
-        border-color: {Gr8Theme.BORDER_HOVER};
-    }}
-    
-    ComboBox:focus, QComboBox:focus {{
-        border-color: {Gr8Theme.BORDER_FOCUS};
-    }}
-    
-    QComboBox::drop-down {{
-        border: none;
-        width: 30px;
-    }}
-    
-    QComboBox::down-arrow {{
-        image: none;
-        border-left: 5px solid transparent;
-        border-right: 5px solid transparent;
-        border-top: 6px solid {Gr8Theme.NEON_GREEN};
-        margin-right: 8px;
+        border-top: 6px solid {Gr8Theme.TEXT_ON_ACCENT};
     }}
     
     /* ===== 스핀박스 ===== */
@@ -212,59 +218,79 @@ def get_custom_stylesheet():
         background-color: {Gr8Theme.BG_INPUT};
         color: {Gr8Theme.TEXT_PRIMARY};
         border: 2px solid {Gr8Theme.BORDER_DEFAULT};
-        border-radius: 8px;
-        padding: 8px 12px;
-        min-height: 36px;
+        border-radius: 5px;
+        padding: 5px 10px;
+        padding-right: 25px;
+        font-size: 13px;
     }}
     
     SpinBox:focus, QSpinBox:focus, DoubleSpinBox:focus, QDoubleSpinBox:focus {{
-        border-color: {Gr8Theme.BORDER_FOCUS};
+        border-color: {Gr8Theme.NEON_GREEN};
     }}
     
     QSpinBox::up-button, QDoubleSpinBox::up-button {{
+        subcontrol-origin: border;
+        subcontrol-position: right;
         background-color: {Gr8Theme.NEON_GREEN};
-        border-radius: 4px;
+        border-radius: 2px;
+        width: 20px;
         margin: 2px;
     }}
     
     QSpinBox::down-button, QDoubleSpinBox::down-button {{
+        subcontrol-origin: border;
+        subcontrol-position: right;
         background-color: {Gr8Theme.NEON_BLUE};
-        border-radius: 4px;
+        border-radius: 2px;
+        width: 20px;
         margin: 2px;
+    }}
+    
+    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
+        image: none;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-bottom: 5px solid {Gr8Theme.TEXT_ON_ACCENT};
+    }}
+    
+    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
+        image: none;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 5px solid {Gr8Theme.TEXT_ON_ACCENT};
     }}
     
     /* ===== 체크박스 ===== */
     CheckBox, QCheckBox {{
         color: {Gr8Theme.TEXT_PRIMARY};
-        spacing: 8px;
+        spacing: 6px;
     }}
     
     QCheckBox::indicator {{
-        width: 20px;
-        height: 20px;
+        width: 18px;
+        height: 18px;
         border: 2px solid {Gr8Theme.BORDER_DEFAULT};
-        border-radius: 4px;
+        border-radius: 3px;
         background-color: {Gr8Theme.BG_INPUT};
     }}
     
     QCheckBox::indicator:hover {{
-        border-color: {Gr8Theme.BORDER_HOVER};
+        border-color: {Gr8Theme.NEON_BLUE};
     }}
     
     QCheckBox::indicator:checked {{
-        background: {Gr8Theme.GRADIENT_PRIMARY};
+        background-color: {Gr8Theme.NEON_GREEN};
         border-color: {Gr8Theme.NEON_GREEN};
     }}
     
     /* ===== 스위치 버튼 ===== */
     SwitchButton {{
         background-color: {Gr8Theme.BG_TERTIARY};
-        border: 2px solid {Gr8Theme.BORDER_DEFAULT};
+        border: none;
     }}
     
     SwitchButton:checked {{
-        background: {Gr8Theme.GRADIENT_PRIMARY};
-        border-color: {Gr8Theme.NEON_GREEN};
+        background-color: {Gr8Theme.NEON_GREEN};
     }}
     
     /* ===== 테이블 ===== */
@@ -273,14 +299,14 @@ def get_custom_stylesheet():
         alternate-background-color: {Gr8Theme.BG_TERTIARY};
         color: {Gr8Theme.TEXT_PRIMARY};
         gridline-color: {Gr8Theme.BORDER_DEFAULT};
-        border: 1px solid {Gr8Theme.BORDER_DEFAULT};
-        border-radius: 8px;
+        border: 2px solid {Gr8Theme.BORDER_DEFAULT};
+        border-radius: 5px;
         selection-background-color: {Gr8Theme.NEON_BLUE};
         selection-color: {Gr8Theme.TEXT_ON_ACCENT};
     }}
     
     QTableWidget::item {{
-        padding: 8px;
+        padding: 4px 8px;
         border-bottom: 1px solid {Gr8Theme.BORDER_DEFAULT};
     }}
     
@@ -288,58 +314,52 @@ def get_custom_stylesheet():
         background-color: {Gr8Theme.BG_TERTIARY};
     }}
     
+    QTableWidget QTableCornerButton::section {{
+        background-color: {Gr8Theme.BG_TERTIARY};
+        border: none;
+    }}
+    
     QHeaderView::section {{
         background-color: {Gr8Theme.BG_TERTIARY};
         color: {Gr8Theme.TEXT_PRIMARY};
-        padding: 14px 10px;
-        min-height: 45px;
+        padding: 6px 8px;
         border: none;
         border-bottom: 2px solid {Gr8Theme.NEON_GREEN};
         font-weight: bold;
-        font-size: 13px;
-    }}
-    
-    QHeaderView {{
-        min-height: 45px;
+        font-size: 12px;
     }}
     
     /* ===== 스크롤바 ===== */
     QScrollBar:vertical {{
         background-color: {Gr8Theme.BG_SECONDARY};
-        width: 10px;
-        border-radius: 5px;
-        margin: 0;
+        width: 12px;
+        border-radius: 6px;
     }}
     
     QScrollBar::handle:vertical {{
-        background-color: {Gr8Theme.BG_TERTIARY};
-        border: 1px solid {Gr8Theme.BORDER_DEFAULT};
-        border-radius: 5px;
+        background-color: {Gr8Theme.BORDER_DEFAULT};
+        border-radius: 6px;
         min-height: 30px;
     }}
     
     QScrollBar::handle:vertical:hover {{
-        background-color: {Gr8Theme.BORDER_HOVER};
-        border-color: {Gr8Theme.NEON_BLUE};
+        background-color: {Gr8Theme.NEON_BLUE};
     }}
     
     QScrollBar:horizontal {{
         background-color: {Gr8Theme.BG_SECONDARY};
-        height: 10px;
-        border-radius: 5px;
-        margin: 0;
+        height: 12px;
+        border-radius: 6px;
     }}
     
     QScrollBar::handle:horizontal {{
-        background-color: {Gr8Theme.BG_TERTIARY};
-        border: 1px solid {Gr8Theme.BORDER_DEFAULT};
-        border-radius: 5px;
+        background-color: {Gr8Theme.BORDER_DEFAULT};
+        border-radius: 6px;
         min-width: 30px;
     }}
     
     QScrollBar::handle:horizontal:hover {{
-        background-color: {Gr8Theme.BORDER_HOVER};
-        border-color: {Gr8Theme.NEON_BLUE};
+        background-color: {Gr8Theme.NEON_BLUE};
     }}
     
     QScrollBar::add-line, QScrollBar::sub-line {{
@@ -350,101 +370,103 @@ def get_custom_stylesheet():
     /* ===== 타이틀 라벨 ===== */
     TitleLabel {{
         color: {Gr8Theme.TEXT_PRIMARY};
-        font-size: 24px;
+        font-size: 22px;
         font-weight: bold;
-        padding: 8px 0;
+        padding: 5px 0;
     }}
     
     SubtitleLabel {{
         color: {Gr8Theme.NEON_GREEN};
-        font-size: 18px;
+        font-size: 16px;
         font-weight: bold;
-        padding: 6px 0;
+        padding: 8px 0 4px 0;
     }}
     
     BodyLabel {{
         color: {Gr8Theme.TEXT_SECONDARY};
-        font-size: 14px;
+        font-size: 13px;
     }}
     
     /* ===== Progress Bar ===== */
     QProgressBar {{
         background-color: {Gr8Theme.BG_INPUT};
         border: 2px solid {Gr8Theme.BORDER_DEFAULT};
-        border-radius: 8px;
-        height: 24px;
+        border-radius: 5px;
+        height: 20px;
         text-align: center;
         color: {Gr8Theme.TEXT_PRIMARY};
     }}
     
     QProgressBar::chunk {{
-        background: {Gr8Theme.GRADIENT_PRIMARY};
-        border-radius: 6px;
+        background-color: {Gr8Theme.NEON_GREEN};
+        border-radius: 3px;
     }}
     
     /* ===== 탭 (Pivot) ===== */
     Pivot {{
-        background-color: {Gr8Theme.BG_SECONDARY};
-        border-bottom: 3px solid {Gr8Theme.BORDER_DEFAULT};
-        padding: 5px 0;
+        background-color: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid {Gr8Theme.BORDER_DEFAULT} !important;
+        padding: 0 !important;
+        margin: 0 !important;
     }}
     
-    Pivot > QPushButton {{
-        color: {Gr8Theme.TEXT_SECONDARY};
-        background-color: {Gr8Theme.BG_DARK};
-        border: 1px solid {Gr8Theme.BORDER_DEFAULT};
-        border-bottom: 3px solid {Gr8Theme.BORDER_DEFAULT};
-        padding: 12px 20px;
-        margin: 2px 4px;
-        margin-bottom: -3px;
-        font-size: 14px;
-        min-width: 100px;
-        border-radius: 8px 8px 0 0;
+    Pivot QPushButton, Pivot > QPushButton {{
+        color: {Gr8Theme.TEXT_SECONDARY} !important;
+        background-color: transparent !important;
+        border: none !important;
+        border-bottom: 4px solid transparent !important;
+        padding: 14px 28px !important;
+        margin: 0 !important;
+        margin-bottom: -2px !important;
+        font-size: 14px !important;
+        min-width: 100px !important;
+        border-radius: 0 !important;
+        text-align: center !important;
     }}
     
-    Pivot > QPushButton:hover {{
-        color: {Gr8Theme.NEON_BLUE};
-        background-color: {Gr8Theme.BG_TERTIARY};
-        border-color: {Gr8Theme.NEON_BLUE};
+    Pivot QPushButton:hover, Pivot > QPushButton:hover {{
+        color: {Gr8Theme.TEXT_PRIMARY} !important;
+        background-color: rgba(0, 212, 255, 0.1) !important;
+        border-bottom: 4px solid {Gr8Theme.NEON_BLUE} !important;
     }}
     
-    Pivot > QPushButton:checked {{
-        color: {Gr8Theme.NEON_GREEN};
-        background-color: {Gr8Theme.BG_SECONDARY};
-        border: 1px solid {Gr8Theme.NEON_GREEN};
-        border-bottom: 3px solid {Gr8Theme.NEON_GREEN};
-        font-weight: bold;
+    Pivot QPushButton:checked, Pivot > QPushButton:checked {{
+        color: {Gr8Theme.NEON_GREEN} !important;
+        background-color: transparent !important;
+        border: none !important;
+        border-bottom: 4px solid {Gr8Theme.NEON_GREEN} !important;
+        font-weight: bold !important;
     }}
     
     /* ===== 툴팁 ===== */
     QToolTip {{
         background-color: {Gr8Theme.BG_TERTIARY};
         color: {Gr8Theme.TEXT_PRIMARY};
-        border: 1px solid {Gr8Theme.NEON_GREEN};
-        border-radius: 6px;
-        padding: 8px 12px;
+        border: 2px solid {Gr8Theme.NEON_GREEN};
+        border-radius: 5px;
+        padding: 6px 10px;
     }}
     
     /* ===== InfoBar (알림) ===== */
     InfoBar {{
         background-color: {Gr8Theme.BG_SECONDARY};
         border-left: 4px solid {Gr8Theme.NEON_GREEN};
-        border-radius: 8px;
-        padding: 16px;
+        border-radius: 5px;
+        padding: 12px;
     }}
     
     /* ===== 네비게이션 ===== */
     NavigationInterface {{
         background-color: {Gr8Theme.BG_SECONDARY};
-        border-right: 1px solid {Gr8Theme.BORDER_DEFAULT};
-        min-width: 75px;
+        border-right: 2px solid {Gr8Theme.BORDER_DEFAULT};
     }}
     
     NavigationInterface::item {{
         color: {Gr8Theme.TEXT_SECONDARY};
-        padding: 12px 16px;
-        margin: 4px 8px;
-        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 3px 6px;
+        border-radius: 5px;
     }}
     
     NavigationInterface::item:hover {{
@@ -453,7 +475,7 @@ def get_custom_stylesheet():
     }}
     
     NavigationInterface::item:selected {{
-        background: {Gr8Theme.GRADIENT_PRIMARY};
+        background-color: {Gr8Theme.NEON_GREEN};
         color: {Gr8Theme.TEXT_ON_ACCENT};
         font-weight: bold;
     }}
@@ -461,16 +483,11 @@ def get_custom_stylesheet():
     /* ===== 스플리터 ===== */
     QSplitter::handle {{
         background-color: {Gr8Theme.BORDER_DEFAULT};
-        width: 2px;
-        margin: 0;
+        width: 3px;
     }}
     
     QSplitter::handle:hover {{
         background-color: {Gr8Theme.NEON_BLUE};
-    }}
-    
-    QSplitter::handle:pressed {{
-        background-color: {Gr8Theme.NEON_GREEN};
     }}
     """
 
@@ -478,4 +495,3 @@ def get_custom_stylesheet():
 def apply_theme_to_widget(widget):
     """위젯에 커스텀 테마 적용"""
     widget.setStyleSheet(get_custom_stylesheet())
-

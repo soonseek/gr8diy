@@ -48,8 +48,17 @@ OKX_WS_BUSINESS = "wss://ws.okx.com:8443/ws/v5/business"
 OKX_RATE_LIMIT_PER_SECOND = 10  # 초당 최대 요청 수
 OKX_RATE_LIMIT_COOLDOWN = 60  # 429 발생 시 대기 시간(초)
 
-# 기본 심볼 목록
+# 기본 심볼 목록 (CCXT 통일 형식)
 DEFAULT_SYMBOLS = [
+    "BTC/USDT:USDT",
+    "ETH/USDT:USDT",
+    "SOL/USDT:USDT",
+    "XRP/USDT:USDT",
+    "DOGE/USDT:USDT"
+]
+
+# 레거시 심볼 (OKX 전용 - 하위 호환용)
+LEGACY_SYMBOLS = [
     "BTC-USDT-SWAP",
     "ETH-USDT-SWAP",
     "SOL-USDT-SWAP",
@@ -57,8 +66,17 @@ DEFAULT_SYMBOLS = [
     "DOGE-USDT-SWAP"
 ]
 
-# 타임프레임
-TIMEFRAMES = ["1m", "5m", "15m", "1H", "4H", "1D"]
+# 타임프레임 (CCXT 표준)
+TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"]
+
+# 레거시 타임프레임 (OKX 전용)
+LEGACY_TIMEFRAMES = ["1m", "5m", "15m", "1H", "4H", "1D"]
+
+# 기본 활성화 거래소
+DEFAULT_EXCHANGES = ["binance", "bybit", "okx", "bitget", "kucoin"]
+
+# 데이터 폴링 간격 (초)
+DATA_POLLING_INTERVAL = 10
 
 # 보조지표 기본 파라미터
 INDICATOR_PARAMS = {

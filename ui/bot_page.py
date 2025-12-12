@@ -4,7 +4,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget
 from PySide6.QtCore import Qt
 from qfluentwidgets import (
-    Pivot, TitleLabel
+    Pivot, TitleLabel, FluentIcon
 )
 
 from ui.bot_conditions import BotConditionsWidget
@@ -22,11 +22,8 @@ class BotPage(QWidget):
     def _init_ui(self):
         """UI 초기화"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 10, 10, 10)
-        
-        # 타이틀
-        title = TitleLabel("자동매매 봇")
-        layout.addWidget(title)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
         
         # Pivot (탭) - 좌측 정렬
         pivot_layout = QHBoxLayout()
@@ -40,6 +37,9 @@ class BotPage(QWidget):
         self.conditions_widget = BotConditionsWidget()
         self.monitoring_widget = BotMonitoringWidget()
         self.history_widget = BotHistoryWidget()
+        
+        # 봇 실행 시 모니터링으로 전환
+        self.conditions_widget.bot_started.connect(self._switch_to_monitoring)
         
         # Pivot 아이템 추가 및 워커 공유 설정
         def switch_to_conditions():
@@ -56,18 +56,21 @@ class BotPage(QWidget):
         
         self.pivot.addItem(
             routeKey="conditions",
-            text="조건설정",
-            onClick=switch_to_conditions
+            text="봇 생성",
+            onClick=switch_to_conditions,
+            icon=FluentIcon.ADD
         )
         self.pivot.addItem(
             routeKey="monitoring",
             text="모니터링",
-            onClick=switch_to_monitoring
+            onClick=switch_to_monitoring,
+            icon=FluentIcon.ROBOT
         )
         self.pivot.addItem(
             routeKey="history",
             text="내역",
-            onClick=switch_to_history
+            onClick=switch_to_history,
+            icon=FluentIcon.HISTORY
         )
         
         # 스택 위젯에 추가
@@ -80,5 +83,12 @@ class BotPage(QWidget):
         
         # 기본 탭 선택
         self.pivot.setCurrentItem("conditions")
+    
+    def _switch_to_monitoring(self):
+        """모니터링 탭으로 전환"""
+        self.stack_widget.setCurrentIndex(1)
+        self.pivot.setCurrentItem("monitoring")
+        if hasattr(self.conditions_widget, 'bot_workers'):
+            self.monitoring_widget.set_bot_workers(self.conditions_widget.bot_workers)
 
 

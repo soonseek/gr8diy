@@ -15,6 +15,7 @@ from ui.home_page import HomePage
 from ui.settings_page import SettingsPage
 from ui.data_page import DataPage
 from ui.bot_page import BotPage
+from ui.backtest_page import BacktestPage
 from ui.log_widget import LogWidget
 from ui.theme import apply_theme_to_widget, Gr8Theme
 from config.settings import WINDOW_TITLE
@@ -62,8 +63,8 @@ class MainWindow(QMainWindow):
         # 콘텐츠 영역
         print("[DEBUG-MW] Step 12: QVBoxLayout 생성")
         content_layout = QVBoxLayout()
-        content_layout.setContentsMargins(10, 10, 10, 10)
-        content_layout.setSpacing(10)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
         
         # 헤더 영역
         print("[DEBUG-MW] Step 13: _create_header 호출")
@@ -103,9 +104,15 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 8)
         splitter.setStretchFactor(1, 2)
         
-        # 네비게이션 인터페이스
+        # 네비게이션 인터페이스 (항상 펼침, 메뉴 버튼 숨김)
         print("[DEBUG-MW] Step 10: NavigationInterface 생성 시작")
-        self.navigation = NavigationInterface(showReturnButton=False)
+        self.navigation = NavigationInterface(showMenuButton=False, showReturnButton=False)
+        
+        # 네비게이션 200px 고정 너비 (펼침/닫힘 불가)
+        self.navigation.setExpandWidth(200)
+        self.navigation.setFixedWidth(200)
+        self.navigation.setCollapsible(False)  # 접기 비활성화
+        
         print("[DEBUG-MW] Step 11: NavigationInterface 생성 완료")
         
         # 메인 레이아웃에 추가
@@ -129,52 +136,13 @@ class MainWindow(QMainWindow):
         logger.info("UI", "메인 윈도우 초기화 완료")
     
     def _create_header(self):
-        """헤더 위젯 생성"""
-        header = QWidget()
-        header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(20, 15, 20, 15)
-        
-        # 브랜딩 로고 텍스트 (그라디언트 효과)
-        logo_label = QLabel("Gr8 DIY")
-        logo_font = QFont()
-        logo_font.setPointSize(24)
-        logo_font.setBold(True)
-        logo_label.setFont(logo_font)
-        logo_label.setStyleSheet(f"""
-            QLabel {{
-                color: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 {Gr8Theme.NEON_GREEN}, 
-                    stop:1 {Gr8Theme.NEON_BLUE});
-                background: transparent;
-                padding: 8px 16px;
-                border-radius: 8px;
-            }}
-        """)
-        
-        # 서브타이틀
-        subtitle_label = QLabel("유튜브 <소피아빠>와 구독자님들이 함께 만들어가는 자동매매봇 오픈소스 프로젝트")
-        subtitle_label.setStyleSheet(f"""
-            QLabel {{
-                color: {Gr8Theme.TEXT_SECONDARY};
-                font-size: 11px;
-                font-style: italic;
-                margin-left: 12px;
-            }}
-        """)
-        
-        header_layout.addWidget(logo_label)
-        header_layout.addWidget(subtitle_label)
-        header_layout.addStretch()
-        
-        # 헤더 스타일 (네온 언더라인)
-        header.setStyleSheet(f"""
-            QWidget {{
-                background-color: {Gr8Theme.BG_SECONDARY};
-                border-bottom: 2px solid transparent;
-                border-image: linear-gradient(90deg, {Gr8Theme.NEON_GREEN} 0%, {Gr8Theme.NEON_BLUE} 100%);
-            }}
-        """)
-        
+        """헤더 - 단순 텍스트"""
+        header = QLabel()
+        header.setText(f"<span style='color:#00d4aa;font-size:16px;font-weight:bold;'>Gr8 DIY</span>"
+                       f"<span style='color:#7f8c8d;font-size:11px;margin-left:12px;'>"
+                       f"  유튜브 &lt;소피아빠&gt;와 구독자님들이 함께 만들어가는 자동매매봇 오픈소스 프로젝트</span>")
+        header.setContentsMargins(12, 8, 0, 8)
+        header.setStyleSheet("background:transparent; border:none;")
         return header
     
     def _init_pages(self):
@@ -202,6 +170,12 @@ class MainWindow(QMainWindow):
         self.bot_page = BotPage()
         print("[DEBUG-MW] Step 19-6: BotPage 생성 완료")
         self.stack_widget.addWidget(self.bot_page)
+        
+        # 백테스트 페이지
+        print("[DEBUG-MW] Step 19-7: BacktestPage 생성 시작")
+        self.backtest_page = BacktestPage()
+        print("[DEBUG-MW] Step 19-8: BacktestPage 생성 완료")
+        self.stack_widget.addWidget(self.backtest_page)
     
     def _init_navigation(self):
         """네비게이션 아이템 추가"""
@@ -241,6 +215,14 @@ class MainWindow(QMainWindow):
             position=NavigationItemPosition.TOP
         )
         
+        # 백테스트 메뉴
+        self.navigation.addItem(
+            routeKey="backtest",
+            icon=FluentIcon.DEVELOPER_TOOLS,
+            text="백테스트",
+            onClick=lambda: self.switch_page(4),
+            position=NavigationItemPosition.TOP
+        )
         
         # 기본 선택 - 홈
         self.navigation.setCurrentItem("home")

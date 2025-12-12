@@ -1,12 +1,13 @@
 """
 자동매매 봇 워커
+CCXT 멀티 거래소 지원 버전
 """
 import time
 from typing import Dict, Optional
 from PySide6.QtCore import QObject, Signal
 from datetime import datetime
 
-from api.okx_client import OKXClient
+from api.ccxt_client import CCXTClient
 from database.repository import (
     BotConfigsRepository, OrdersRepository, 
     PositionsRepository, BotLogsRepository, TradesHistoryRepository
@@ -16,7 +17,7 @@ from utils.time_helper import time_helper
 
 
 class TradingBotWorker(QObject):
-    """자동매매 봇 워커"""
+    """자동매매 봇 워커 (CCXT)"""
     
     # Signals
     position_opened = Signal(str, str, float)  # symbol, side, size
@@ -26,10 +27,11 @@ class TradingBotWorker(QObject):
     existing_position_found = Signal(str, str)  # symbol, message
     position_closed = Signal(str, float)  # symbol, pnl
     
-    def __init__(self, okx_client: OKXClient, config: Dict):
+    def __init__(self, client: CCXTClient, config: Dict):
         super().__init__()
-        self.okx_client = okx_client
+        self.client = client  # CCXT 클라이언트
         self.config = config
+        self.exchange_id = config.get('exchange_id', 'okx')
         self.is_running = False
         
         # Repositories
@@ -112,7 +114,7 @@ class TradingBotWorker(QObject):
         
         try:
             # 해당 심볼의 포지션 조회
-            positions = self.okx_client.get_positions(symbol)
+            positions = self.client.get_positions(symbol)
             
             if not positions:
                 # 포지션 없음 - 정상
@@ -148,13 +150,11 @@ class TradingBotWorker(QObject):
                              f"{symbol} 기존 포지션 청산: {pos_side} {pos_size}")
                 
                 # 시장가 청산 주문
-                close_order = self.okx_client.place_order(
-                    inst_id=symbol,
+                close_order = self.client.place_market_order(
+                    symbol=symbol,
                     side=close_side,
-                    ord_type="market",
-                    sz=pos_size,
+                    size=pos_size,
                     pos_side=pos_side,
-                    td_mode=self.config['margin_mode'],
                     reduce_only=True
                 )
                 
@@ -176,7 +176,7 @@ class TradingBotWorker(QObject):
             time.sleep(2)
             
             # 다시 확인
-            check_positions = self.okx_client.get_positions(symbol)
+            check_positions = self.client.get_positions(symbol)
             if check_positions:
                 for pos in check_positions:
                     if abs(float(pos.get('pos', 0))) > 0:
@@ -206,11 +206,10 @@ class TradingBotWorker(QObject):
             # 포지션 측 결정 (헤지 모드)
             pos_side = "long" if direction == "LONG" else "short"
             
-            success = self.okx_client.set_leverage(
-                inst_id=symbol,
-                lever=leverage,
-                mgn_mode=margin_mode,
-                pos_side=pos_side
+            success = self.client.set_leverage(
+                symbol=symbol,
+                leverage=leverage,
+                margin_mode=margin_mode
             )
             
             if success:
@@ -239,7 +238,7 @@ class TradingBotWorker(QObject):
         
         try:
             # 현재가 조회
-            ticker = self.okx_client.get_ticker(symbol)
+            ticker = self.client.get_ticker(symbol)
             if not ticker:
                 error_msg = f"{symbol} 현재가 조회 실패"
                 logger.error("TradingBot", error_msg)
@@ -288,26 +287,14 @@ class TradingBotWorker(QObject):
             logger.info("TradingBot",
                        f"{symbol} TP/SL 설정: TP={tp_trigger:.2f}, SL={sl_trigger_str}")
             
-            # attachAlgoOrds 배열 생성 (TP/SL을 하나의 객체에)
-            attach_algo_ords = [{
-                "tpTriggerPx": str(tp_trigger),
-                "tpOrdPx": "-1"  # 시장가
-            }]
-            
-            # SL 설정 (있는 경우)
-            if sl_trigger:
-                attach_algo_ords[0]["slTriggerPx"] = str(sl_trigger)
-                attach_algo_ords[0]["slOrdPx"] = "-1"  # 시장가
-            
-            # 시장가 주문 + TP/SL 함께 설정
-            order = self.okx_client.place_order(
-                inst_id=symbol,
+            # 시장가 주문 + TP/SL
+            order = self.client.place_order_with_tp_sl(
+                symbol=symbol,
                 side=side,
-                ord_type="market",
-                sz=size,
-                pos_side=pos_side,
-                td_mode=margin_mode,
-                attach_algo_ords=attach_algo_ords
+                size=size,
+                tp_price=tp_trigger,
+                sl_price=sl_trigger,
+                pos_side=pos_side
             )
             
             if not order:
@@ -321,11 +308,12 @@ class TradingBotWorker(QObject):
                            f"td_mode={margin_mode}, leverage={leverage}")
                 return False
             
-            self.entry_order_id = order['ordId']
+            self.entry_order_id = order['order_id']
             logger.info("TradingBot", f"{symbol} 진입 주문 성공: {self.entry_order_id}")
             
             # DB 저장
             self.orders_repo.insert_order({
+                'exchange_id': self.config['exchange_id'],
                 'order_id': self.entry_order_id,
                 'symbol': symbol,
                 'side': side,
@@ -336,6 +324,7 @@ class TradingBotWorker(QObject):
             
             # 포지션 정보 저장
             self.position_id = self.positions_repo.insert_position({
+                'exchange_id': self.config['exchange_id'],
                 'symbol': symbol,
                 'side': pos_side,
                 'size': size,
@@ -368,7 +357,7 @@ class TradingBotWorker(QObject):
         
         try:
             # 현재가 조회
-            ticker = self.okx_client.get_ticker(symbol)
+            ticker = self.client.get_ticker(symbol)
             if not ticker:
                 return False
             
@@ -378,7 +367,7 @@ class TradingBotWorker(QObject):
             position = None
             for retry in range(3):
                 time.sleep(0.5)  # 짧은 대기
-                position = self.okx_client.get_positions(symbol)
+                position = self.client.get_positions(symbol)
                 if position and len(position) > 0:
                     break
                 logger.warning("TradingBot", f"{symbol} 포지션 조회 재시도 {retry + 1}/3")
@@ -391,7 +380,7 @@ class TradingBotWorker(QObject):
                 logger.warning("TradingBot", f"{symbol} 저장된 포지션 정보로 TP/SL 설정 시도")
                 
                 # 진입 주문 조회로 대체
-                entry_order = self.okx_client.get_order(symbol, ord_id=self.entry_order_id)
+                entry_order = self.client.get_order(symbol, ord_id=self.entry_order_id)
                 if not entry_order:
                     logger.error("TradingBot", f"{symbol} 진입 주문 정보도 조회 실패")
                     return False
@@ -401,7 +390,7 @@ class TradingBotWorker(QObject):
                     return False
             else:
                 pos_data = position[0]
-                pos_size = abs(float(pos_data['pos']))
+                pos_size = pos_data.get('size', 0)
                 
                 if pos_size == 0:
                     error_msg = f"{symbol} 포지션 수량이 0입니다"
@@ -429,38 +418,22 @@ class TradingBotWorker(QObject):
             # 가장 간단한 방법: 진입 주문 시 TP/SL을 함께 설정하는 것이지만,
             # 이미 진입했으므로 조건부 주문(알고 주문) 사용이 필요
             
-            # 현재는 간단하게 역방향 지정가 주문 사용
-            # TP: 트리거 가격 이상에서 체결되는 지정가 주문
-            if direction == "LONG":
-                # 롱 청산: 현재가보다 높은 가격에 매도 지정가
-                tp_order = self.okx_client.place_order(
-                    inst_id=symbol,
-                    side=tp_side,
-                    ord_type="limit",
-                    sz=pos_size,
-                    px=tp_price,
-                    pos_side=pos_side,
-                    td_mode=self.config['margin_mode'],
-                    reduce_only=True
-                )
-            else:
-                # 숏 청산: 현재가보다 낮은 가격에 매수 지정가
-                tp_order = self.okx_client.place_order(
-                    inst_id=symbol,
-                    side=tp_side,
-                    ord_type="limit",
-                    sz=pos_size,
-                    px=tp_price,
-                    pos_side=pos_side,
-                    td_mode=self.config['margin_mode'],
-                    reduce_only=True
-                )
+            # TP 지정가 주문
+            tp_order = self.client.place_limit_order(
+                symbol=symbol,
+                side=tp_side,
+                size=pos_size,
+                price=tp_price,
+                pos_side=pos_side,
+                reduce_only=True
+            )
             
             if tp_order:
-                self.tp_order_id = tp_order['ordId']
+                self.tp_order_id = tp_order['order_id']
                 logger.info("TradingBot", f"{symbol} TP 주문 생성: {self.tp_order_id}")
                 
                 self.orders_repo.insert_order({
+                    'exchange_id': self.config['exchange_id'],
                     'order_id': self.tp_order_id,
                     'symbol': symbol,
                     'side': tp_side,
@@ -474,36 +447,21 @@ class TradingBotWorker(QObject):
             
             # SL 주문 (설정된 경우)
             if sl_offset and sl_price:
-                if direction == "LONG":
-                    # 롱 손절: 현재가보다 낮은 가격에 매도 지정가
-                    sl_order = self.okx_client.place_order(
-                        inst_id=symbol,
-                        side=tp_side,
-                        ord_type="limit",
-                        sz=pos_size,
-                        px=sl_price,
-                        pos_side=pos_side,
-                        td_mode=self.config['margin_mode'],
-                        reduce_only=True
-                    )
-                else:
-                    # 숏 손절: 현재가보다 높은 가격에 매수 지정가
-                    sl_order = self.okx_client.place_order(
-                        inst_id=symbol,
-                        side=tp_side,
-                        ord_type="limit",
-                        sz=pos_size,
-                        px=sl_price,
-                        pos_side=pos_side,
-                        td_mode=self.config['margin_mode'],
-                        reduce_only=True
-                    )
+                sl_order = self.client.place_limit_order(
+                    symbol=symbol,
+                    side=tp_side,
+                    size=pos_size,
+                    price=sl_price,
+                    pos_side=pos_side,
+                    reduce_only=True
+                )
                 
                 if sl_order:
-                    self.sl_order_id = sl_order['ordId']
+                    self.sl_order_id = sl_order['order_id']
                     logger.info("TradingBot", f"{symbol} SL 주문 생성: {self.sl_order_id}")
                     
                     self.orders_repo.insert_order({
+                        'exchange_id': self.config['exchange_id'],
                         'order_id': self.sl_order_id,
                         'symbol': symbol,
                         'side': tp_side,
@@ -535,7 +493,7 @@ class TradingBotWorker(QObject):
             logger.info("TradingBot", f"{symbol} 마틴게일 설정 시작 - {steps}단계")
             
             # 현재가 조회
-            ticker = self.okx_client.get_ticker(symbol)
+            ticker = self.client.get_ticker(symbol)
             if not ticker:
                 logger.error("TradingBot", f"{symbol} 마틴게일 설정 실패 - 현재가 조회 실패")
                 return
@@ -574,25 +532,23 @@ class TradingBotWorker(QObject):
                            f"{symbol} 마틴 {i+1}단계: {side} {martin_size} @ {trigger_price:.2f} "
                            f"(비율: {size_ratios[i]}x)")
                 
-                # 지정가 주문으로 예약
-                # 트리거 가격 도달 시 자동 체결
-                order = self.okx_client.place_order(
-                    inst_id=symbol,
+                # 지정가 주문
+                order = self.client.place_limit_order(
+                    symbol=symbol,
                     side=side,
-                    ord_type="limit",  # 지정가 주문
-                    sz=martin_size,
-                    px=trigger_price,
-                    pos_side=pos_side,
-                    td_mode=margin_mode
+                    size=martin_size,
+                    price=trigger_price,
+                    pos_side=pos_side
                 )
                 
                 if order:
-                    order_id = order['ordId']
+                    order_id = order['order_id']
                     self.martingale_order_ids.append(order_id)
                     logger.info("TradingBot", f"{symbol} 마틴 {i+1}단계 주문 생성: {order_id}")
                     
                     # DB 저장
                     self.orders_repo.insert_order({
+                        'exchange_id': self.config['exchange_id'],
                         'order_id': order_id,
                         'symbol': symbol,
                         'side': side,
@@ -624,7 +580,7 @@ class TradingBotWorker(QObject):
         while self.is_running:
             try:
                 # 포지션 상태 확인
-                position = self.okx_client.get_positions(symbol)
+                position = self.client.get_positions(symbol)
                 
                 if not position or len(position) == 0:
                     # 조회 실패 시 재시도
@@ -643,7 +599,7 @@ class TradingBotWorker(QObject):
                 retry_count = 0
                 
                 pos_data = position[0]
-                pos_size = abs(float(pos_data['pos']))
+                pos_size = pos_data.get('size', 0)
                 
                 if pos_size == 0:
                     logger.info("TradingBot", f"{symbol} 포지션 청산됨 (TP/SL 체결)")
@@ -683,14 +639,14 @@ class TradingBotWorker(QObject):
                         break
                 
                 # PNL 저장 (청산 시 사용)
-                self.last_pnl = float(pos_data.get('upl', 0))
-                self.last_mark_price = float(pos_data.get('markPx', 0))
+                self.last_pnl = pos_data.get('unrealized_pnl', 0)
+                self.last_mark_price = pos_data.get('mark_price', 0)
                 
                 # 10초마다 상태 로그
                 if int(time.time()) % 10 == 0:
                     logger.debug("TradingBot", 
                                f"{symbol} 모니터링 중 - 포지션: {pos_size}, "
-                               f"가격: {pos_data.get('markPx', 'N/A')}, "
+                               f"가격: {self.last_mark_price:.2f}, "
                                f"PNL: {self.last_pnl:.2f}")
                 
                 # 1초 대기
@@ -725,28 +681,26 @@ class TradingBotWorker(QObject):
                 self._cancel_all_pending_orders()
                 
                 # 2. 포지션 청산
-                positions = self.okx_client.get_positions(symbol)
+                positions = self.client.get_positions(symbol)
                 if positions:
                     for pos in positions:
-                        pos_size = abs(float(pos.get('pos', 0)))
+                        pos_size = pos.get('size', 0)
                         if pos_size > 0:
-                            pos_side = pos.get('posSide', '')
+                            pos_side = pos.get('side', 'long')
                             close_side = "sell" if pos_side == "long" else "buy"
                             
                             logger.info("TradingBot", f"{symbol} 포지션 청산: {pos_side} {pos_size}")
                             
-                        close_order = self.okx_client.place_order(
-                            inst_id=symbol,
-                            side=close_side,
-                            ord_type="market",
-                            sz=pos_size,
-                            pos_side=pos_side,
-                            td_mode=self.config['margin_mode'],
-                            reduce_only=True
-                        )
-                        
-                        if close_order:
-                            logger.info("TradingBot", f"{symbol} 청산 주문 성공")
+                            close_order = self.client.place_market_order(
+                                symbol=symbol,
+                                side=close_side,
+                                size=pos_size,
+                                pos_side=pos_side,
+                                reduce_only=True
+                            )
+                            
+                            if close_order:
+                                logger.info("TradingBot", f"{symbol} 청산 주문 성공")
                 
                 # 청산 후 거래 내역 저장
                 exit_time = time_helper.format_kst(time_helper.now_kst())
@@ -785,6 +739,7 @@ class TradingBotWorker(QObject):
             
             # DB 저장
             self.trades_repo.insert_trade({
+                'exchange_id': self.config['exchange_id'],
                 'symbol': symbol,
                 'side': side,
                 'entry_price': entry_price,
@@ -814,7 +769,7 @@ class TradingBotWorker(QObject):
             # 마틴게일 주문 취소
             for order_id in self.martingale_order_ids:
                 try:
-                    self.okx_client.cancel_order(symbol, ord_id=order_id)
+                    self.client.cancel_order(symbol, order_id)
                     logger.debug("TradingBot", f"{symbol} 마틴게일 주문 취소: {order_id}")
                 except:
                     pass
@@ -822,13 +777,13 @@ class TradingBotWorker(QObject):
             self.martingale_order_ids = []
             
             # 모든 미체결 주문 조회 및 취소
-            open_orders = self.okx_client.get_open_orders(symbol)
+            open_orders = self.client.get_open_orders(symbol)
             if open_orders:
                 for order in open_orders:
-                    order_id = order.get('ordId')
+                    order_id = order.get('id')
                     if order_id:
                         try:
-                            self.okx_client.cancel_order(symbol, ord_id=order_id)
+                            self.client.cancel_order(symbol, ord_id=order_id)
                             logger.debug("TradingBot", f"{symbol} 주문 취소: {order_id}")
                         except:
                             pass

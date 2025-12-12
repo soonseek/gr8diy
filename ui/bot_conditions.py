@@ -2,318 +2,331 @@
 봇 조건설정 위젯
 """
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QScrollArea
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QScrollArea, QFrame
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from qfluentwidgets import (
-    CardWidget, SubtitleLabel, BodyLabel, ComboBox, SpinBox,
+    SubtitleLabel, BodyLabel, ComboBox, SpinBox,
     DoubleSpinBox, SwitchButton, PushButton, CheckBox,
-    InfoBar, InfoBarPosition
+    InfoBar
 )
 
-from PySide6.QtCore import QThread
 from database.repository import BotConfigsRepository, ActiveSymbolsRepository
 from config.settings import BOT_INTERVALS, MAX_LEVERAGE, MAX_MARTINGALE_STEPS, CREDENTIALS_PATH
+from config.exchanges import SUPPORTED_EXCHANGES, ALL_EXCHANGE_IDS, DEFAULT_EXCHANGE_ID
 from utils.logger import logger
 from utils.crypto import CredentialManager
-from api.okx_client import OKXClient
+from api.exchange_factory import get_exchange_factory
 from workers.trading_bot import TradingBotWorker
 
 
 class BotConditionsWidget(QWidget):
     """봇 조건설정 위젯"""
     
+    bot_started = Signal()
+    
     def __init__(self):
         super().__init__()
         self.bot_configs_repo = BotConfigsRepository()
         self.symbols_repo = ActiveSymbolsRepository()
         self.credential_manager = CredentialManager(CREDENTIALS_PATH)
+        self.exchange_id = DEFAULT_EXCHANGE_ID
         
-        # 가용 증거금 계산
         self.available_margin = self._get_available_margin()
         
-        # 봇 워커 관리
         self.bot_threads = {}
         self.bot_workers = {}
         
         self._init_ui()
         
-        # 프로그램 시작 시 기존 봇 자동 복원
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(2000, self._auto_restore_bots)  # 2초 후 자동 복원
+        QTimer.singleShot(100, self._refresh_balance)
+        QTimer.singleShot(2000, self._auto_restore_bots)
     
     def _init_ui(self):
-        """UI 초기화"""
-        # 스크롤 영역
+        """UI"""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea { border: none; }")
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(15)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
         
-        # 종목 설정 카드
-        symbol_card = CardWidget()
-        symbol_layout = QVBoxLayout(symbol_card)
+        # 거래소 선택
+        layout.addWidget(SubtitleLabel("거래소 선택"))
         
-        symbol_title = SubtitleLabel("종목 설정")
-        symbol_layout.addWidget(symbol_title)
+        ex_row = QHBoxLayout()
+        ex_row.setSpacing(5)
+        ex_row.addWidget(BodyLabel("거래소:"))
         
-        # 가용 증거금 표시
-        balance_layout = QHBoxLayout()
+        # 연동된 거래소만
+        self.configured_exchanges = []
+        for ex_id in ALL_EXCHANGE_IDS:
+            creds = self.credential_manager.get_exchange_credentials(ex_id, is_testnet=False)
+            if creds.get('api_key'):
+                self.configured_exchanges.append(ex_id)
+        
+        self.exchange_combo = ComboBox()
+        self.exchange_combo.setFixedHeight(32)
+        
+        if not self.configured_exchanges:
+            self.exchange_combo.addItem("⚠ 연동된 거래소 없음")
+            self.exchange_combo.setEnabled(False)
+        else:
+            for ex_id in self.configured_exchanges:
+                ex_info = SUPPORTED_EXCHANGES.get(ex_id, {})
+                self.exchange_combo.addItem(f"{ex_info.get('name', ex_id)} (#{ex_info.get('rank', 999)})")
+            
+            last_exchange = self._load_last_exchange()
+            if last_exchange and last_exchange in self.configured_exchanges:
+                self.exchange_combo.setCurrentIndex(self.configured_exchanges.index(last_exchange))
+            else:
+                self.exchange_combo.setCurrentIndex(0)
+            
+            self.exchange_id = self.configured_exchanges[self.exchange_combo.currentIndex()]
+        
+        self.exchange_combo.currentIndexChanged.connect(self._on_exchange_changed)
+        ex_row.addWidget(self.exchange_combo)
+        ex_row.addStretch()
+        layout.addLayout(ex_row)
+        
+        self._add_line(layout)
+        
+        # 종목 설정
+        layout.addWidget(SubtitleLabel("종목 설정"))
+        
+        bal_row = QHBoxLayout()
+        bal_row.setSpacing(5)
         
         if self.available_margin > 0:
-            self.balance_info = BodyLabel(
-                f"💰 계정 가용 증거금: {self.available_margin:.2f} USDT\n"
-                f"📊 심볼당 권장 증거금: {self.available_margin / 5:.2f} USDT (5개 균등 분배)"
-            )
-            self.balance_info.setWordWrap(True)
-            self.balance_info.setStyleSheet("color: #2ecc71; font-weight: bold;")
-            balance_layout.addWidget(self.balance_info)
+            self.balance_info = BodyLabel(f"💰 가용: {self.available_margin:.2f} USDT")
+            self.balance_info.setStyleSheet("color: #2ecc71; font-size: 11px;")
         else:
-            self.balance_info = BodyLabel("⚠ 가용 증거금을 조회할 수 없습니다")
-            self.balance_info.setWordWrap(True)
-            self.balance_info.setStyleSheet("color: #e74c3c;")
-            balance_layout.addWidget(self.balance_info)
+            self.balance_info = BodyLabel("⚠ 가용 증거금 조회 불가")
+            self.balance_info.setStyleSheet("color: #e74c3c; font-size: 11px;")
+        bal_row.addWidget(self.balance_info)
         
-        # 새로고침 버튼
-        refresh_balance_btn = PushButton("잔고 새로고침")
-        refresh_balance_btn.clicked.connect(self._refresh_balance)
-        balance_layout.addWidget(refresh_balance_btn)
-        balance_layout.addStretch()
+        refresh_btn = PushButton("잔고 새로고침")
+        refresh_btn.setFixedHeight(28)
+        refresh_btn.clicked.connect(self._refresh_balance)
+        bal_row.addWidget(refresh_btn)
+        bal_row.addStretch()
+        layout.addLayout(bal_row)
         
-        symbol_layout.addLayout(balance_layout)
+        desc = BodyLabel("활성 심볼에 대해 방향, 증거금, 레버리지를 설정하세요.")
+        desc.setStyleSheet("color: #7f8c8d; font-size: 10px;")
+        layout.addWidget(desc)
         
-        symbol_desc = BodyLabel(
-            "활성 심볼에 대해 방향, 증거금, 레버리지를 설정하세요."
-        )
-        symbol_layout.addWidget(symbol_desc)
+        # 헤더
+        header = QHBoxLayout()
+        header.setSpacing(5)
         
-        # 헤더 행
-        header_layout = QHBoxLayout()
-        header_layout.addWidget(BodyLabel(""))  # 체크박스 공간
+        h_cb = BodyLabel("")
+        h_cb.setFixedWidth(30)
+        header.addWidget(h_cb)
         
-        header_symbol = BodyLabel("심볼")
-        header_symbol.setFixedWidth(150)
-        header_layout.addWidget(header_symbol)
+        h_sym = BodyLabel("심볼")
+        h_sym.setFixedWidth(140)
+        header.addWidget(h_sym)
         
-        header_direction = BodyLabel("방향")
-        header_direction.setFixedWidth(100)
-        header_layout.addWidget(header_direction)
+        h_dir = BodyLabel("방향")
+        h_dir.setFixedWidth(120)
+        header.addWidget(h_dir)
         
-        header_margin = BodyLabel("증거금")
-        header_margin.setMinimumWidth(180)
-        header_layout.addWidget(header_margin)
+        h_mar = BodyLabel("증거금")
+        h_mar.setFixedWidth(160)
+        header.addWidget(h_mar)
         
-        header_leverage = BodyLabel("레버리지")
-        header_leverage.setMinimumWidth(120)
-        header_layout.addWidget(header_leverage)
+        h_lev = BodyLabel("레버리지")
+        h_lev.setFixedWidth(120)
+        header.addWidget(h_lev)
         
-        header_layout.addStretch()
-        symbol_layout.addLayout(header_layout)
+        header.addStretch()
+        layout.addLayout(header)
         
-        # 활성 심볼 목록
-        active_symbols = self.symbols_repo.get_active_symbols()
+        # 심볼 목록
+        active_symbols = self.symbols_repo.get_active_symbols(self.exchange_id)
         self.symbol_configs = {}
         
         for symbol in active_symbols:
-            symbol_row_layout = QHBoxLayout()
+            row = QHBoxLayout()
+            row.setSpacing(5)
             
-            # 체크박스
-            checkbox = CheckBox()
-            if symbol == "BTC-USDT-SWAP":
-                checkbox.setChecked(True)
-            checkbox.stateChanged.connect(
-                lambda state, s=symbol: self._on_symbol_checkbox_changed(s, state)
-            )
-            symbol_row_layout.addWidget(checkbox)
+            cb = CheckBox()
+            cb.setFixedWidth(30)
+            cb.setChecked(symbol == "BTC/USDT:USDT")
+            cb.stateChanged.connect(lambda s, sy=symbol: self._on_symbol_check(sy, s))
+            row.addWidget(cb)
             
-            # 심볼명
-            symbol_label = BodyLabel(symbol)
-            symbol_label.setFixedWidth(150)
-            symbol_row_layout.addWidget(symbol_label)
+            lbl = BodyLabel(symbol)
+            lbl.setFixedWidth(140)
+            lbl.setStyleSheet("font-size: 12px;")
+            row.addWidget(lbl)
             
-            # 방향
-            direction_combo = ComboBox()
-            direction_combo.addItems(["LONG", "SHORT"])
-            direction_combo.setFixedWidth(100)
-            symbol_row_layout.addWidget(direction_combo)
+            dir_combo = ComboBox()
+            dir_combo.addItems(["📈 LONG", "📉 SHORT"])
+            dir_combo.setCurrentIndex(0)
+            dir_combo.setFixedWidth(120)
+            dir_combo.setFixedHeight(28)
+            row.addWidget(dir_combo)
             
-            # 증거금
-            margin_spin = DoubleSpinBox()
-            margin_spin.setRange(1, 100000)
-            margin_spin.setSuffix(" USDT")
-            margin_spin.setMinimumWidth(180)
-            margin_spin.setDecimals(2)
-            symbol_row_layout.addWidget(margin_spin)
+            margin = DoubleSpinBox()
+            margin.setRange(1, 100000)
+            margin.setSuffix(" USDT")
+            margin.setFixedWidth(160)
+            margin.setFixedHeight(32)
+            margin.setDecimals(2)
+            row.addWidget(margin)
             
-            # 레버리지 (심볼별)
-            leverage_spin = SpinBox()
-            leverage_spin.setRange(1, MAX_LEVERAGE)
-            # 심볼별 기본 레버리지
-            if "BTC" in symbol or "ETH" in symbol:
-                leverage_spin.setValue(10)  # BTC, ETH: 10배
-            else:
-                leverage_spin.setValue(5)   # 나머지: 5배
-            leverage_spin.setSuffix("x")
-            leverage_spin.setMinimumWidth(120)
-            symbol_row_layout.addWidget(leverage_spin)
+            lev = SpinBox()
+            lev.setRange(1, MAX_LEVERAGE)
+            lev.setValue(10 if "BTC" in symbol or "ETH" in symbol else 5)
+            lev.setSuffix("x")
+            lev.setFixedWidth(120)
+            lev.setFixedHeight(32)
+            row.addWidget(lev)
             
-            # 기본적으로 비활성화 (체크된 것만 활성화)
-            if symbol != "BTC-USDT-SWAP":
-                direction_combo.setEnabled(False)
-                margin_spin.setEnabled(False)
-                leverage_spin.setEnabled(False)
+            if symbol != "BTC/USDT:USDT":
+                dir_combo.setEnabled(False)
+                margin.setEnabled(False)
+                lev.setEnabled(False)
             
-            symbol_row_layout.addStretch()
-            symbol_layout.addLayout(symbol_row_layout)
+            row.addStretch()
+            layout.addLayout(row)
             
             self.symbol_configs[symbol] = {
-                "checkbox": checkbox,
-                "direction": direction_combo,
-                "margin": margin_spin,
-                "leverage": leverage_spin
+                "checkbox": cb,
+                "direction": dir_combo,
+                "margin": margin,
+                "leverage": lev
             }
         
-        # 초기 증거금 분배
         self._redistribute_margin()
         
-        layout.addWidget(symbol_card)
+        self._add_line(layout)
         
-        # 매매 설정 카드
-        trade_card = CardWidget()
-        trade_layout = QVBoxLayout(trade_card)
+        # 매매 설정
+        layout.addWidget(SubtitleLabel("매매 설정"))
         
-        trade_title = SubtitleLabel("매매 설정")
-        trade_layout.addWidget(trade_title)
-        
-        form_layout = QFormLayout()
+        form1 = QFormLayout()
+        form1.setSpacing(3)
+        form1.setContentsMargins(0, 0, 0, 0)
         
         self.interval_combo = ComboBox()
         self.interval_combo.addItems(BOT_INTERVALS)
-        form_layout.addRow("인터벌:", self.interval_combo)
+        self.interval_combo.setFixedHeight(28)
+        form1.addRow("인터벌:", self.interval_combo)
         
         self.margin_mode_combo = ComboBox()
         self.margin_mode_combo.addItems(["cross (교차)", "isolated (격리)"])
-        self.margin_mode_combo.setCurrentIndex(0)  # cross가 기본
-        form_layout.addRow("증거금 모드:", self.margin_mode_combo)
+        self.margin_mode_combo.setFixedHeight(28)
+        form1.addRow("증거금 모드:", self.margin_mode_combo)
         
-        info_label = BodyLabel("※ 레버리지는 각 심볼별로 위에서 설정합니다.")
-        info_label.setStyleSheet("color: #7f8c8d;")
-        trade_layout.addWidget(info_label)
+        layout.addLayout(form1)
         
-        trade_layout.addLayout(form_layout)
-        layout.addWidget(trade_card)
+        self._add_line(layout)
         
-        # 마틴게일 설정 카드
-        martin_card = CardWidget()
-        martin_layout = QVBoxLayout(martin_card)
-        
-        martin_title = SubtitleLabel("추가 매수 (마틴게일)")
-        martin_layout.addWidget(martin_title)
-        
-        switch_layout = QHBoxLayout()
-        switch_layout.addWidget(BodyLabel("추가 매수 활성화:"))
+        # 마틴게일
+        martin_row = QHBoxLayout()
+        martin_row.addWidget(SubtitleLabel("추가 매수 (마틴게일)"))
         self.martin_switch = SwitchButton()
-        self.martin_switch.setChecked(True)  # 기본 활성화
-        self.martin_switch.checkedChanged.connect(self._toggle_martingale)
-        switch_layout.addWidget(self.martin_switch)
-        switch_layout.addStretch()
-        martin_layout.addLayout(switch_layout)
+        self.martin_switch.setChecked(True)
+        self.martin_switch.checkedChanged.connect(self._toggle_martin)
+        martin_row.addWidget(self.martin_switch)
+        martin_row.addStretch()
+        layout.addLayout(martin_row)
         
-        self.martin_form = QFormLayout()
+        form2 = QFormLayout()
+        form2.setSpacing(3)
+        form2.setContentsMargins(0, 0, 0, 0)
         
         self.martin_steps_spin = SpinBox()
         self.martin_steps_spin.setRange(1, MAX_MARTINGALE_STEPS)
         self.martin_steps_spin.setValue(3)
-        self.martin_steps_spin.setEnabled(True)  # 기본 활성화
-        self.martin_form.addRow("최대 단계:", self.martin_steps_spin)
+        self.martin_steps_spin.setFixedHeight(28)
+        form2.addRow("최대 단계:", self.martin_steps_spin)
         
         self.martin_offset_spin = DoubleSpinBox()
         self.martin_offset_spin.setRange(0.1, 50.0)
         self.martin_offset_spin.setValue(5.0)
         self.martin_offset_spin.setSuffix(" %")
-        self.martin_offset_spin.setEnabled(True)  # 기본 활성화
+        self.martin_offset_spin.setFixedHeight(28)
         self.martin_offset_spin.valueChanged.connect(self._on_martin_offset_changed)
-        self.martin_form.addRow("오프셋:", self.martin_offset_spin)
+        form2.addRow("오프셋:", self.martin_offset_spin)
         
-        martin_layout.addLayout(self.martin_form)
+        layout.addLayout(form2)
         
-        martin_info = BodyLabel(
-            "※ 사이즈 비율은 1, 1, 2, 4, 8, 16, ... 패턴으로 자동 적용됩니다."
-        )
-        martin_info.setStyleSheet("color: #7f8c8d;")
-        martin_layout.addWidget(martin_info)
+        martin_info = BodyLabel("※ 사이즈: 1, 1, 2, 4, 8, 16... 자동 적용")
+        martin_info.setStyleSheet("color: #7f8c8d; font-size: 10px;")
+        layout.addWidget(martin_info)
         
-        # 익절/레버리지 관계 설명
-        leverage_info = BodyLabel(
-            "💡 익절 계산 공식: 실제 익절 PnL(%) = 오프셋(%) × 레버리지\n"
-            "   예) 오프셋 1% + 레버리지 10배 = PnL 약 10% 부근에서 익절\n"
-            "   예) 오프셋 2% + 레버리지 5배 = PnL 약 10% 부근에서 익절"
-        )
-        leverage_info.setStyleSheet("color: #00d4ff; font-size: 12px;")
-        martin_layout.addWidget(leverage_info)
+        self._add_line(layout)
         
-        layout.addWidget(martin_card)
+        # 익절/손절
+        layout.addWidget(SubtitleLabel("익절 / 손절"))
         
-        # 익절/손절 설정 카드
-        tp_sl_card = CardWidget()
-        tp_sl_layout = QVBoxLayout(tp_sl_card)
-        
-        tp_sl_title = SubtitleLabel("익절 / 손절")
-        tp_sl_layout.addWidget(tp_sl_title)
-        
-        tp_sl_form = QFormLayout()
+        form3 = QFormLayout()
+        form3.setSpacing(3)
+        form3.setContentsMargins(0, 0, 0, 0)
         
         self.tp_offset_spin = DoubleSpinBox()
         self.tp_offset_spin.setRange(0.1, 100.0)
-        self.tp_offset_spin.setValue(1.0)  # 기본값 1%
+        self.tp_offset_spin.setValue(1.0)
         self.tp_offset_spin.setSuffix(" %")
-        tp_sl_form.addRow("익절 오프셋 (필수):", self.tp_offset_spin)
+        self.tp_offset_spin.setFixedHeight(28)
+        form3.addRow("익절:", self.tp_offset_spin)
         
-        sl_layout = QHBoxLayout()
+        sl_row = QHBoxLayout()
+        sl_row.setSpacing(3)
         self.sl_enabled_check = CheckBox()
         self.sl_enabled_check.stateChanged.connect(self._toggle_sl)
-        sl_layout.addWidget(self.sl_enabled_check)
+        sl_row.addWidget(self.sl_enabled_check)
         
         self.sl_offset_spin = DoubleSpinBox()
         self.sl_offset_spin.setRange(0.1, 100.0)
-        self.sl_offset_spin.setValue(6.0)  # 기본값: 마틴 5% + 1%
+        self.sl_offset_spin.setValue(6.0)
         self.sl_offset_spin.setSuffix(" %")
+        self.sl_offset_spin.setFixedHeight(28)
         self.sl_offset_spin.setEnabled(False)
-        sl_layout.addWidget(self.sl_offset_spin)
-        sl_layout.addStretch()
+        sl_row.addWidget(self.sl_offset_spin)
+        sl_row.addStretch()
         
-        tp_sl_form.addRow("손절 오프셋 (선택):", sl_layout)
+        form3.addRow("손절:", sl_row)
+        layout.addLayout(form3)
         
-        tp_sl_layout.addLayout(tp_sl_form)
+        sl_warn = BodyLabel("⚠ 손절 미설정 시 큰 손실 위험")
+        sl_warn.setStyleSheet("color: #e74c3c; font-size: 10px;")
+        layout.addWidget(sl_warn)
         
-        sl_warning = BodyLabel(
-            "⚠ 손절을 설정하지 않으면 큰 손실 위험이 있습니다.\n"
-            "💡 추가매수 활성화 시: 손절은 추가매수 오프셋 + 1% 이상이어야 합니다."
-        )
-        sl_warning.setStyleSheet("color: #e74c3c;")
-        tp_sl_layout.addWidget(sl_warning)
+        self._add_line(layout)
         
-        layout.addWidget(tp_sl_card)
-        
-        # 실행 버튼
-        btn_layout = QHBoxLayout()
+        # 버튼
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(5)
         
         save_btn = PushButton("설정 저장")
+        save_btn.setFixedHeight(28)
         save_btn.clicked.connect(self._save_config)
-        btn_layout.addWidget(save_btn)
+        btn_row.addWidget(save_btn)
         
-        self.run_btn = PushButton("봇 실행")
+        self.run_btn = PushButton("🚀 봇 실행")
+        self.run_btn.setFixedHeight(40)
+        self.run_btn.setStyleSheet("""
+            background-color: #00ff9f;
+            color: #0a0e27;
+            border: none;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+        """)
         self.run_btn.clicked.connect(self._run_bot)
-        btn_layout.addWidget(self.run_btn)
+        btn_row.addWidget(self.run_btn)
+        btn_row.addStretch()
         
-        btn_layout.addStretch()
-        
-        layout.addLayout(btn_layout)
+        layout.addLayout(btn_row)
         layout.addStretch()
         
         scroll.setWidget(container)
@@ -322,118 +335,122 @@ class BotConditionsWidget(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(scroll)
         
-        # 초기화 시 손절 최소값 업데이트 (마틴게일 기본 활성화)
         self._update_sl_minimum()
     
-    def _toggle_martingale(self, checked: bool):
+    def _add_line(self, layout):
+        """구분선"""
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("background: #4a5080;")
+        line.setFixedHeight(1)
+        layout.addWidget(line)
+    
+    def _on_exchange_changed(self, index: int):
+        """거래소 변경"""
+        if not self.configured_exchanges or index < 0 or index >= len(self.configured_exchanges):
+            return
+        
+        self.exchange_id = self.configured_exchanges[index]
+        ex = SUPPORTED_EXCHANGES.get(self.exchange_id, {})
+        logger.info("Bot", f"거래소 변경: {ex.get('name')} ({self.exchange_id})")
+        
+        self._save_last_exchange(self.exchange_id)
+        self._refresh_balance()
+    
+    def _load_last_exchange(self) -> str:
+        """마지막 선택 거래소"""
+        try:
+            from pathlib import Path
+            from config.settings import DATA_DIR
+            last_ex_file = DATA_DIR / "last_bot_exchange.txt"
+            if last_ex_file.exists():
+                return last_ex_file.read_text().strip()
+        except:
+            pass
+        return ""
+    
+    def _save_last_exchange(self, exchange_id: str):
+        """마지막 선택 저장"""
+        try:
+            from pathlib import Path
+            from config.settings import DATA_DIR
+            last_ex_file = DATA_DIR / "last_bot_exchange.txt"
+            last_ex_file.write_text(exchange_id)
+        except Exception as e:
+            logger.warning("Bot", f"거래소 선택 저장 실패: {e}")
+    
+    def _toggle_martin(self, checked: bool):
         """마틴게일 토글"""
         self.martin_steps_spin.setEnabled(checked)
         self.martin_offset_spin.setEnabled(checked)
-        
-        # 마틴게일 활성화 시 손절 최소값 업데이트
         if checked:
             self._update_sl_minimum()
     
     def _on_martin_offset_changed(self, value: float):
-        """마틴게일 오프셋 변경 시"""
+        """마틴게일 오프셋 변경"""
         if self.martin_switch.isChecked():
             self._update_sl_minimum()
     
     def _update_sl_minimum(self):
-        """손절 최소값 업데이트"""
+        """손절 최소값"""
         if not self.martin_switch.isChecked():
-            # 마틴게일 비활성화 시 원래대로
             self.sl_offset_spin.setMinimum(0.1)
             return
         
         martin_offset = self.martin_offset_spin.value()
-        min_sl_offset = martin_offset + 1.0  # 최소 1% 차이
-        
-        # 손절 최소값 설정
-        self.sl_offset_spin.setMinimum(min_sl_offset)
-        
-        # 현재 손절 값이 최소값보다 작으면 자동 조정
-        if self.sl_offset_spin.value() < min_sl_offset:
-            self.sl_offset_spin.setValue(min_sl_offset)
-        
-        logger.debug("Bot", f"손절 최소값 업데이트: {min_sl_offset}% (마틴 {martin_offset}% + 1%)")
+        min_sl = martin_offset + 1.0
+        self.sl_offset_spin.setMinimum(min_sl)
+        if self.sl_offset_spin.value() < min_sl:
+            self.sl_offset_spin.setValue(min_sl)
     
     def _toggle_sl(self, state: int):
         """손절 토글"""
-        checked = (state == Qt.Checked)
-        self.sl_offset_spin.setEnabled(checked)
-        
-        # 체크되지 않았을 때 경고 표시만 (입력란은 비활성화)
-        # 빨간색 보더는 제거 (혼란 방지)
-        self.sl_offset_spin.setStyleSheet("")
+        self.sl_offset_spin.setEnabled(state == Qt.Checked)
     
-    def _on_symbol_checkbox_changed(self, symbol: str, state: int):
-        """심볼 체크박스 변경"""
+    def _on_symbol_check(self, symbol: str, state: int):
+        """심볼 체크"""
         checked = (state == Qt.Checked)
-        
-        # 위젯 활성화/비활성화
-        widgets = self.symbol_configs[symbol]
-        widgets['direction'].setEnabled(checked)
-        widgets['margin'].setEnabled(checked)
-        widgets['leverage'].setEnabled(checked)
-        
-        # 증거금 재분배
+        w = self.symbol_configs[symbol]
+        w['direction'].setEnabled(checked)
+        w['margin'].setEnabled(checked)
+        w['leverage'].setEnabled(checked)
         self._redistribute_margin()
-        
-        logger.info("Bot", f"{symbol} {'활성화' if checked else '비활성화'}")
     
     def _redistribute_margin(self):
-        """활성화된 심볼에 증거금 균등 분배"""
-        # 활성화된 심볼 수 카운트
-        active_count = sum(
-            1 for widgets in self.symbol_configs.values() 
-            if widgets['checkbox'].isChecked()
-        )
-        
+        """증거금 재분배"""
+        active_count = sum(1 for w in self.symbol_configs.values() if w['checkbox'].isChecked())
         if active_count == 0:
             return
         
-        # 균등 분배 계산
-        margin_per_symbol = (self.available_margin / active_count) if self.available_margin > 0 else 100
-        margin_per_symbol = round(margin_per_symbol, 2)
+        margin_per = (self.available_margin / active_count) if self.available_margin > 0 else 100
+        margin_per = round(margin_per, 2)
         
-        # 활성화된 심볼에만 적용
-        for widgets in self.symbol_configs.values():
-            if widgets['checkbox'].isChecked():
-                widgets['margin'].setValue(margin_per_symbol)
-        
-        logger.info("Bot", f"증거금 재분배: {active_count}개 심볼 × {margin_per_symbol} USDT")
+        for w in self.symbol_configs.values():
+            if w['checkbox'].isChecked():
+                w['margin'].setValue(margin_per)
     
     def _save_config(self):
-        """설정 저장"""
+        """저장"""
         try:
-            logger.info("Bot", "봇 설정 저장 시작")
-            
-            # 각 심볼별 설정 저장
-            for symbol, widgets in self.symbol_configs.items():
-                # 체크되지 않은 심볼은 건너뛰기
-                if not widgets['checkbox'].isChecked():
+            for symbol, w in self.symbol_configs.items():
+                if not w['checkbox'].isChecked():
                     continue
                 
-                direction = widgets['direction'].currentText()
+                direction_text = w['direction'].currentText()
+                direction = "LONG" if "LONG" in direction_text else "SHORT"
                 
-                margin = widgets['margin'].value()
-                leverage = widgets['leverage'].value()
-                
-                # 마진모드 처리
                 margin_mode_text = self.margin_mode_combo.currentText()
                 margin_mode = "isolated" if "isolated" in margin_mode_text else "cross"
-                
-                # 손절 오프셋 처리
                 sl_offset = self.sl_offset_spin.value() if self.sl_enabled_check.isChecked() else None
                 
                 config = {
+                    'exchange_id': self.exchange_id,
                     'symbol': symbol,
                     'direction': direction,
                     'interval': self.interval_combo.currentText(),
-                    'max_margin': margin,
+                    'max_margin': w['margin'].value(),
                     'margin_mode': margin_mode,
-                    'leverage': leverage,
+                    'leverage': w['leverage'].value(),
                     'martingale_enabled': 1 if self.martin_switch.isChecked() else 0,
                     'martingale_steps': self.martin_steps_spin.value(),
                     'martingale_offset_pct': self.martin_offset_spin.value(),
@@ -443,84 +460,55 @@ class BotConditionsWidget(QWidget):
                 }
                 
                 self.bot_configs_repo.upsert_config(config)
-                logger.info("Bot", f"{symbol} 설정 저장 완료")
             
-            InfoBar.success(
-                title="저장 완료",
-                content="봇 설정이 저장되었습니다.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+            InfoBar.success("저장 완료", "봇 설정 저장됨", parent=self)
             
         except Exception as e:
-            import traceback
-            error_msg = f"설정 저장 실패: {str(e)}"
-            logger.error("Bot", error_msg, traceback.format_exc())
-            InfoBar.error(
-                title="저장 실패",
-                content=error_msg,
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+            InfoBar.error("저장 실패", str(e), duration=-1, parent=self)
     
     def _run_bot(self):
         """봇 실행"""
         try:
-            logger.info("Bot", "봇 실행 시작")
-            
-            # 설정 검증
             if not self._validate_settings():
-                self._reset_run_button()  # 검증 실패 시 버튼 복원
                 return
             
-            # OKX 클라이언트 생성
-            creds = self.credential_manager.get_okx_credentials()
-            if not all(creds.values()):
-                InfoBar.warning(
-                    title="OKX 미연동",
-                    content="먼저 설정에서 OKX API 자격증명을 저장해주세요.",
-                    orient=Qt.Horizontal,
-                    isClosable=True,
-                    position=InfoBarPosition.TOP,
-                    parent=self
-                )
-                self._reset_run_button()  # 연동 실패 시 버튼 복원
+            factory = get_exchange_factory()
+            ccxt_client = factory.get_client(self.exchange_id)
+            if not ccxt_client:
+                InfoBar.error("연결 실패", f"{self.exchange_id} 클라이언트 생성 실패", duration=-1, parent=self)
                 return
             
-            okx_client = OKXClient(
-                creds['api_key'],
-                creds['secret'],
-                creds['passphrase']
-            )
-            
-            # 먼저 설정 저장
             self._save_config()
             
-            # 각 심볼별 봇 시작
+            # 선택된 심볼들 확인
+            selected_symbols = [sym for sym, w in self.symbol_configs.items() if w['checkbox'].isChecked()]
+            
+            if not selected_symbols:
+                InfoBar.warning("심볼 선택 필요", "최소 1개 심볼 체크", parent=self)
+                return
+            
+            # 기존 포지션 확인
+            for symbol in selected_symbols:
+                positions = ccxt_client.get_positions(symbol)
+                if positions:
+                    for pos in positions:
+                        if pos.get('size', 0) > 0 and (pos.get('entry_price', 0) > 0 or pos.get('mark_price', 0) > 0):
+                            InfoBar.error("포지션 존재", f"{symbol}에 이미 포지션이 있습니다", duration=-1, parent=self)
+                            return
+            
             started_count = 0
-            for symbol, widgets in self.symbol_configs.items():
-                # 체크되지 않은 심볼은 건너뛰기
-                if not widgets['checkbox'].isChecked():
-                    continue
-                
-                direction = widgets['direction'].currentText()
-                
-                # 설정 가져오기
-                config = self.bot_configs_repo.get_config(symbol)
+            for symbol in selected_symbols:
+                config = self.bot_configs_repo.get_config(self.exchange_id, symbol)
                 if not config:
-                    logger.warning("Bot", f"{symbol} 설정을 찾을 수 없습니다")
+                    logger.warning("Bot", f"{symbol} 설정 없음")
                     continue
                 
-                # 봇 워커 생성
+                config['exchange_id'] = self.exchange_id
+                
                 bot_thread = QThread()
-                bot_worker = TradingBotWorker(okx_client, config)
+                bot_worker = TradingBotWorker(ccxt_client, config)
                 bot_worker.moveToThread(bot_thread)
                 
-                # 시그널 연결
                 bot_worker.position_opened.connect(self._on_position_opened)
                 bot_worker.order_placed.connect(self._on_order_placed)
                 bot_worker.error_occurred.connect(self._on_bot_error)
@@ -528,270 +516,170 @@ class BotConditionsWidget(QWidget):
                 bot_worker.existing_position_found.connect(self._on_existing_position)
                 bot_worker.position_closed.connect(self._on_position_closed)
                 
-                # 스레드 시작 시 봇 실행
                 bot_thread.started.connect(bot_worker.start_trading)
                 
-                # 저장
                 self.bot_threads[symbol] = bot_thread
                 self.bot_workers[symbol] = bot_worker
                 
-                # 스레드 시작
                 bot_thread.start()
-                
-                # DB에 활성화 상태 저장
-                self.bot_configs_repo.set_active(symbol, True)
-                
-                logger.info("Bot", f"{symbol} 봇 시작됨")
+                self.bot_configs_repo.set_active(self.exchange_id, symbol, True)
                 started_count += 1
             
             if started_count > 0:
-                InfoBar.success(
-                    title="봇 실행",
-                    content=f"{started_count}개 심볼에 대한 자동매매가 시작되었습니다.",
-                    orient=Qt.Horizontal,
-                    isClosable=True,
-                    position=InfoBarPosition.TOP,
-                    parent=self
-                )
-                
-                self.run_btn.setEnabled(False)
-                self.run_btn.setText("실행 중...")
+                InfoBar.success("봇 실행", f"{started_count}개 심볼 시작", parent=self)
+                # 버튼은 활성화 상태 유지 (계속 생성 가능)
+                self.bot_started.emit()  # 모니터링으로 전환
             else:
-                InfoBar.warning(
-                    title="실행 불가",
-                    content="실행할 봇이 없습니다. 체크박스로 심볼을 선택해주세요.",
-                    orient=Qt.Horizontal,
-                    isClosable=True,
-                    position=InfoBarPosition.TOP,
-                    parent=self
-                )
-                self._reset_run_button()  # 실행할 봇 없으면 버튼 복원
+                InfoBar.warning("실행 불가", "설정을 확인해주세요", parent=self)
                 
         except Exception as e:
-            import traceback
-            error_msg = f"봇 실행 실패: {str(e)}"
-            logger.error("Bot", error_msg, traceback.format_exc())
-            InfoBar.error(
-                title="실행 실패",
-                content=error_msg,
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
-            self._reset_run_button()  # 예외 발생 시 버튼 복원
+            InfoBar.error("실행 실패", str(e), duration=-1, parent=self)
+            self._reset_run_button()
     
     def _on_position_opened(self, symbol: str, side: str, size: float):
-        """포지션 진입 완료"""
-        logger.info("Bot", f"{symbol} 포지션 진입: {side} {size}")
-        InfoBar.success(
-            title="포지션 진입",
-            content=f"{symbol} {side} {size} 진입 완료",
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            parent=self
-        )
+        """포지션 진입"""
+        InfoBar.success("포지션 진입", f"{symbol} {side} {size}", parent=self)
     
     def _on_order_placed(self, symbol: str, order_type: str, side: str, price: float):
         """주문 체결"""
-        logger.info("Bot", f"{symbol} {order_type} 주문: {side} @ {price}")
+        logger.info("Bot", f"{symbol} {order_type}: {side} @ {price}")
     
     def _on_bot_error(self, symbol: str, error_msg: str):
         """봇 에러"""
-        logger.error("Bot", f"{symbol} 에러: {error_msg}")
+        InfoBar.error(f"{symbol} 오류", error_msg, duration=-1, parent=self)
         
-        InfoBar.error(
-            title=f"{symbol} 오류",
-            content=error_msg,
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            parent=self
-        )
-        
-        # 해당 봇 스레드 정리
         if symbol in self.bot_threads:
             self.bot_threads[symbol].quit()
             self.bot_threads[symbol].wait()
             del self.bot_threads[symbol]
             del self.bot_workers[symbol]
         
-        # 모든 봇이 종료되면 버튼 활성화
         if len(self.bot_threads) == 0:
             self._reset_run_button()
     
     def _validate_settings(self) -> bool:
         """설정 검증"""
-        # 1. 마틴게일 활성화 시 손절 오프셋 검증
         if self.martin_switch.isChecked() and self.sl_enabled_check.isChecked():
             martin_offset = self.martin_offset_spin.value()
             sl_offset = self.sl_offset_spin.value()
-            min_sl_offset = martin_offset + 1.0
-            
-            if sl_offset < min_sl_offset:
-                InfoBar.error(
-                    title="설정 오류",
-                    content=f"손절 오프셋은 추가매수 오프셋보다 최소 1% 이상 커야 합니다.\n"
-                            f"현재: 손절 {sl_offset}%, 추가매수 {martin_offset}%\n"
-                            f"최소 필요: {min_sl_offset}%",
-                    orient=Qt.Horizontal,
-                    isClosable=True,
-                    duration=10000,
-                    position=InfoBarPosition.TOP,
-                    parent=self
-                )
+            if sl_offset < martin_offset + 1.0:
+                InfoBar.error("설정 오류", f"손절 >= 추가매수+1% 필요", duration=-1, parent=self)
                 return False
         
-        # 2. 증거금 합계 검증
         total_margin = 0
         active_symbols = []
-        for symbol, widgets in self.symbol_configs.items():
-            if widgets['checkbox'].isChecked():
-                margin = widgets['margin'].value()
-                total_margin += margin
+        for symbol, w in self.symbol_configs.items():
+            if w['checkbox'].isChecked():
+                total_margin += w['margin'].value()
                 active_symbols.append(symbol)
         
         if total_margin > self.available_margin and self.available_margin > 0:
-            InfoBar.error(
-                title="증거금 부족",
-                content=f"할당된 증거금 합계({total_margin:.2f} USDT)가 "
-                        f"가용 잔고({self.available_margin:.2f} USDT)를 초과합니다.\n\n"
-                        f"활성 심볼 수를 줄이거나 증거금을 조정해주세요.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                duration=15000,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+            InfoBar.error("증거금 부족", f"할당({total_margin:.2f}) > 가용({self.available_margin:.2f})", duration=-1, parent=self)
             return False
         
-        # 3. 활성 심볼 확인
         if len(active_symbols) == 0:
-            InfoBar.warning(
-                title="실행 불가",
-                content="체크박스로 최소 1개 이상의 심볼을 선택해주세요.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+            InfoBar.warning("실행 불가", "심볼 선택 필요", parent=self)
             return False
-        
-        logger.info("Bot", f"설정 검증 완료: {len(active_symbols)}개 심볼, "
-                           f"증거금 합계 {total_margin:.2f} USDT")
         
         return True
     
     def _on_existing_position(self, symbol: str, message: str):
-        """기존 포지션 발견"""
-        logger.warning("Bot", f"{symbol} {message}")
-        InfoBar.warning(
-            title=f"{symbol} 기존 포지션 정리",
-            content=message,
-            orient=Qt.Horizontal,
-            isClosable=True,
-            duration=10000,  # 10초간 표시
-            position=InfoBarPosition.TOP,
-            parent=self
-        )
+        """기존 포지션"""
+        InfoBar.warning(f"{symbol}", message, parent=self)
     
     def _on_position_closed(self, symbol: str, pnl: float):
-        """포지션 청산 (TP/SL 체결)"""
+        """포지션 청산"""
         pnl_str = f"+{pnl:.2f}" if pnl >= 0 else f"{pnl:.2f}"
-        logger.info("Bot", f"{symbol} 포지션 청산: PNL {pnl_str} USDT")
-        
-        InfoBar.success(
-            title=f"{symbol} 포지션 청산",
-            content=f"익절/손절 체결 - PNL: {pnl_str} USDT\n자동 재실행 모드",
-            orient=Qt.Horizontal,
-            isClosable=True,
-            duration=5000,
-            position=InfoBarPosition.TOP,
-            parent=self
-        )
+        InfoBar.success(f"{symbol} 청산", f"PNL: {pnl_str} USDT", parent=self)
     
     def _on_bot_stopped(self, symbol: str):
         """봇 종료"""
-        logger.info("Bot", f"{symbol} 봇 종료됨")
+        self.bot_configs_repo.set_active(self.exchange_id, symbol, False)
         
-        # DB에 비활성화 상태 저장
-        self.bot_configs_repo.set_active(symbol, False)
-        
-        # 스레드 정리
         if symbol in self.bot_threads:
             self.bot_threads[symbol].quit()
             self.bot_threads[symbol].wait()
             del self.bot_threads[symbol]
             del self.bot_workers[symbol]
         
-        # 모든 봇이 종료되면 버튼 활성화
         if len(self.bot_threads) == 0:
             self._reset_run_button()
     
     def _reset_run_button(self):
-        """봇 실행 버튼 초기화"""
+        """버튼 리셋"""
         self.run_btn.setEnabled(True)
-        self.run_btn.setText("봇 실행")
+        self.run_btn.setText("🚀 봇 실행")
     
     def _auto_restore_bots(self):
-        """기존 봇 자동 복원"""
+        """봇 자동 복원"""
         try:
-            logger.info("Bot", "기존 봇 자동 복원 시작...")
+            logger.info("Bot", f"=== 기존 봇 자동 복원 시작 (거래소: {self.exchange_id}) ===")
             
-            # OKX 클라이언트 생성
-            creds = self.credential_manager.get_okx_credentials()
-            if not all(creds.values()):
-                logger.warning("Bot", "OKX 미연동 - 자동 복원 건너뜀")
+            factory = get_exchange_factory()
+            logger.info("Bot", f"ExchangeFactory 획득 완료")
+            
+            ccxt_client = factory.get_client(self.exchange_id)
+            logger.info("Bot", f"CCXT 클라이언트: {ccxt_client is not None}")
+            
+            if not ccxt_client:
+                logger.warning("Bot", f"{self.exchange_id} 미연동 - 자동 복원 건너뜀")
                 return
             
-            okx_client = OKXClient(
-                creds['api_key'],
-                creds['secret'],
-                creds['passphrase']
-            )
+            # 모든 봇 설정을 가져옴 (is_active와 관계없이)
+            from database.repository import BaseRepository
+            repo = BaseRepository()
+            sql = "SELECT * FROM bot_configs WHERE exchange_id = ?"
+            all_configs = repo.fetch_all(sql, (self.exchange_id,))
+            logger.info("Bot", f"봇 설정 조회: {len(all_configs) if all_configs else 0}개")
             
-            # 활성화된 봇 설정 조회
-            active_configs = self.bot_configs_repo.get_active_configs()
-            
-            if not active_configs:
-                logger.info("Bot", "활성화된 봇 설정 없음")
+            if not all_configs:
+                logger.info("Bot", "봇 설정 없음 - 복원 종료")
                 return
             
-            # 각 설정별로 포지션 확인 및 복원
+            # 먼저 모든 봇을 비활성화 (안전)
+            logger.info("Bot", f"{len(all_configs)}개 봇 설정 발견 - 포지션 확인 중...")
+            
             restored_count = 0
-            for config in active_configs:
+            for config in all_configs:
                 symbol = config['symbol']
                 
-                # OKX에서 실제 포지션 확인
-                positions = okx_client.get_positions(symbol)
+                # 일단 비활성화
+                self.bot_configs_repo.set_active(self.exchange_id, symbol, False)
+                
+                # 포지션 확인
+                positions = ccxt_client.get_positions(symbol)
                 has_position = False
+                actual_size = 0
+                
+                logger.info("Bot", f"{symbol} 포지션 조회 결과: {len(positions) if positions else 0}개")
                 
                 if positions:
                     for pos in positions:
-                        if abs(float(pos.get('pos', 0))) > 0:
+                        size = pos.get('size', 0)
+                        entry_price = pos.get('entry_price', 0)
+                        mark_price = pos.get('mark_price', 0)
+                        logger.info("Bot", f"{symbol} 포지션 - 크기: {size}, 진입가: {entry_price}, 현재가: {mark_price}")
+                        # 크기 > 0이고 (진입가 또는 현재가)가 있으면 실제 포지션
+                        if size > 0 and (entry_price > 0 or mark_price > 0):
                             has_position = True
+                            actual_size = size
                             break
                 
                 if not has_position:
-                    logger.info("Bot", f"{symbol} 포지션 없음 - 봇 설정만 유지")
-                    # 포지션 없으면 봇 비활성화
-                    self.bot_configs_repo.set_active(symbol, False)
+                    logger.info("Bot", f"{symbol} 포지션 없음 - 복원 건너뜀")
                     continue
                 
-                # 포지션이 있으면 봇 복원
-                logger.info("Bot", f"{symbol} 포지션 발견 - 봇 복원 중")
+                logger.info("Bot", f"{symbol} 포지션 {actual_size} 발견 - 봇 복원 시작")
                 
-                # 봇 워커 생성 (모니터링 모드)
+                config['exchange_id'] = self.exchange_id
+                
                 bot_thread = QThread()
-                bot_worker = TradingBotWorker(okx_client, config)
+                bot_worker = TradingBotWorker(ccxt_client, config)
                 bot_worker.moveToThread(bot_thread)
                 
-                # 복원 모드 설정
                 bot_worker.auto_restart = True
                 bot_worker.is_running = True
                 
-                # 시그널 연결
                 bot_worker.position_opened.connect(self._on_position_opened)
                 bot_worker.order_placed.connect(self._on_order_placed)
                 bot_worker.error_occurred.connect(self._on_bot_error)
@@ -799,110 +687,45 @@ class BotConditionsWidget(QWidget):
                 bot_worker.existing_position_found.connect(self._on_existing_position)
                 bot_worker.position_closed.connect(self._on_position_closed)
                 
-                # 모니터링만 시작 (새로 진입하지 않음)
                 bot_thread.started.connect(bot_worker._monitoring_loop)
                 
-                # 저장
                 self.bot_threads[symbol] = bot_thread
                 self.bot_workers[symbol] = bot_worker
                 
-                # 스레드 시작
                 bot_thread.start()
-                
-                logger.info("Bot", f"{symbol} 봇 복원 완료 (모니터링 모드)")
                 restored_count += 1
             
             if restored_count > 0:
-                InfoBar.success(
-                    title="봇 자동 복원",
-                    content=f"{restored_count}개 봇이 자동으로 복원되었습니다.\n"
-                            f"기존 포지션 모니터링을 계속합니다.",
-                    orient=Qt.Horizontal,
-                    isClosable=True,
-                    duration=10000,
-                    position=InfoBarPosition.TOP,
-                    parent=self
-                )
-                
+                InfoBar.success("봇 복원", f"{restored_count}개 봇 복원됨", parent=self)
                 self.run_btn.setEnabled(False)
                 self.run_btn.setText("실행 중...")
                 
-                logger.info("Bot", f"총 {restored_count}개 봇 복원 완료")
-            
         except Exception as e:
-            import traceback
-            logger.error("Bot", f"봇 자동 복원 실패: {str(e)}", traceback.format_exc())
+            logger.error("Bot", f"봇 자동 복원 실패: {str(e)}")
     
     def _refresh_balance(self):
         """잔고 새로고침"""
-        logger.info("Bot", "잔고 새로고침 중...")
-        
         self.available_margin = self._get_available_margin()
         
         if self.available_margin > 0:
-            self.balance_info.setText(
-                f"💰 계정 가용 증거금: {self.available_margin:.2f} USDT\n"
-                f"📊 심볼당 권장 증거금: {self.available_margin / 5:.2f} USDT (5개 균등 분배)"
-            )
-            self.balance_info.setStyleSheet("color: #2ecc71; font-weight: bold;")
-            
-            InfoBar.success(
-                title="잔고 조회 완료",
-                content=f"가용 증거금: {self.available_margin:.2f} USDT",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
-            
-            # 증거금 재분배
+            self.balance_info.setText(f"💰 가용: {self.available_margin:.2f} USDT")
+            self.balance_info.setStyleSheet("color: #2ecc71; font-size: 11px;")
+            InfoBar.success("잔고 조회", f"{self.available_margin:.2f} USDT", parent=self)
             self._redistribute_margin()
         else:
-            self.balance_info.setText("⚠ 가용 증거금을 조회할 수 없습니다")
-            self.balance_info.setStyleSheet("color: #e74c3c;")
-            
-            InfoBar.error(
-                title="잔고 조회 실패",
-                content="OKX API 연동을 확인해주세요.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+            self.balance_info.setText("⚠ 가용 증거금 조회 불가")
+            self.balance_info.setStyleSheet("color: #e74c3c; font-size: 11px;")
+            InfoBar.error("잔고 조회 실패", "API 연동 확인", duration=-1, parent=self)
     
     def _get_available_margin(self) -> float:
-        """OKX 계정 가용 증거금 조회"""
+        """가용 증거금 조회"""
         try:
-            creds = self.credential_manager.get_okx_credentials()
-            if not all(creds.values()):
-                logger.warning("Bot", "OKX 자격증명이 없어 가용 증거금을 조회할 수 없습니다")
+            factory = get_exchange_factory()
+            ccxt_client = factory.get_client(self.exchange_id)
+            if not ccxt_client:
                 return 0.0
             
-            okx_client = OKXClient(
-                creds['api_key'],
-                creds['secret'],
-                creds['passphrase']
-            )
+            return ccxt_client.get_usdt_balance()
             
-            # 계정 잔고 조회
-            balance = okx_client.get_balance()
-            if not balance:
-                logger.warning("Bot", "계정 잔고 조회 실패")
-                return 0.0
-            
-            # USDT 가용 잔고 찾기
-            for asset in balance:
-                if asset.get('ccy') == 'USDT':
-                    available = float(asset.get('availBal', 0))
-                    logger.info("Bot", f"USDT 가용 잔고: {available:.2f}")
-                    return available
-            
-            logger.warning("Bot", "USDT 잔고를 찾을 수 없습니다")
+        except Exception:
             return 0.0
-            
-        except Exception as e:
-            import traceback
-            logger.error("Bot", f"가용 증거금 조회 실패: {str(e)}", traceback.format_exc())
-            return 0.0
-
-

@@ -1,45 +1,54 @@
 """
-설정 페이지
+설정 페이지 - 거래소 연동 + GPT
 """
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QStackedWidget
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QStackedWidget,
+    QScrollArea, QGridLayout, QFrame
 )
 from PySide6.QtCore import Qt
 from qfluentwidgets import (
     Pivot, LineEdit, PasswordLineEdit, 
-    PushButton, InfoBar, InfoBarPosition, CardWidget,
-    TitleLabel, SubtitleLabel, BodyLabel
+    PushButton, InfoBar,
+    SubtitleLabel, BodyLabel, SwitchButton, ComboBox, FluentIcon
 )
 
-from api.okx_client import OKXClient
+from api.exchange_factory import get_exchange_factory
 from api.gpt_client import GPTClient
 from utils.crypto import CredentialManager
 from config.settings import CREDENTIALS_PATH
+from config.exchanges import (
+    SUPPORTED_EXCHANGES, ALL_EXCHANGE_IDS, DEFAULT_EXCHANGE_ID
+)
 from utils.logger import logger
 
 
 class SettingsPage(QWidget):
-    """설정 페이지 (기본 연동 + 거래소 설정)"""
+    """설정 페이지"""
     
     def __init__(self):
         super().__init__()
         self.credential_manager = CredentialManager(CREDENTIALS_PATH)
-        self.okx_client = None
         self.gpt_client = GPTClient()
         
+        self.exchange_ids = ALL_EXCHANGE_IDS.copy()
+        self.current_exchange_id = DEFAULT_EXCHANGE_ID
+        self.is_testnet = False
+        
         self._init_ui()
+        
+        self.current_exchange_id = self.exchange_ids[self.exchange_combo.currentIndex()]
+        self.exchange_combo.currentIndexChanged.connect(self._on_exchange_changed)
+        self.testnet_switch.checkedChanged.connect(self._on_testnet_changed)
+        
+        self._update_ui()
         self._load_credentials()
     
     def _init_ui(self):
-        """UI 초기화"""
+        """UI"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 10, 10, 10)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
         
-        # 타이틀
-        title = TitleLabel("설정")
-        layout.addWidget(title)
-        
-        # Pivot (탭) - 좌측 정렬
         pivot_layout = QHBoxLayout()
         self.pivot = Pivot(self)
         pivot_layout.addWidget(self.pivot)
@@ -47,407 +56,494 @@ class SettingsPage(QWidget):
         
         self.stack_widget = QStackedWidget(self)
         
-        # 기본 연동 탭
-        self.credentials_widget = self._create_credentials_widget()
+        exchange_widget = self._create_exchange_widget()
+        gpt_widget = self._create_gpt_widget()
         
-        # 거래소 설정 탭
-        self.exchange_widget = self._create_exchange_widget()
+        self.pivot.addItem("exchange", "거래소 연동", lambda: self.stack_widget.setCurrentIndex(0), icon=FluentIcon.CONNECT)
+        self.pivot.addItem("gpt", "GPT", lambda: self.stack_widget.setCurrentIndex(1), icon=FluentIcon.ROBOT)
         
-        # Pivot 아이템 추가
-        self.pivot.addItem(
-            routeKey="credentials",
-            text="기본 연동",
-            onClick=lambda: self.stack_widget.setCurrentIndex(0)
-        )
-        self.pivot.addItem(
-            routeKey="exchange",
-            text="거래소 설정",
-            onClick=lambda: self.stack_widget.setCurrentIndex(1)
-        )
-        
-        # 스택 위젯에 추가
-        self.stack_widget.addWidget(self.credentials_widget)
-        self.stack_widget.addWidget(self.exchange_widget)
+        self.stack_widget.addWidget(exchange_widget)
+        self.stack_widget.addWidget(gpt_widget)
         
         layout.addLayout(pivot_layout)
         layout.addWidget(self.stack_widget)
-        layout.addStretch()
         
-        # 기본 탭 선택
-        self.pivot.setCurrentItem("credentials")
-    
-    def _create_credentials_widget(self) -> QWidget:
-        """기본 연동 위젯"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(15)
-        
-        # OKX 카드
-        okx_card = CardWidget()
-        okx_layout = QVBoxLayout(okx_card)
-        
-        okx_title = SubtitleLabel("OKX API 연동")
-        okx_layout.addWidget(okx_title)
-        
-        form_layout = QFormLayout()
-        form_layout.setSpacing(10)
-        
-        self.okx_api_key_edit = LineEdit()
-        self.okx_api_key_edit.setPlaceholderText("API Key")
-        form_layout.addRow("API Key:", self.okx_api_key_edit)
-        
-        self.okx_secret_edit = PasswordLineEdit()
-        self.okx_secret_edit.setPlaceholderText("Secret")
-        form_layout.addRow("Secret:", self.okx_secret_edit)
-        
-        self.okx_passphrase_edit = PasswordLineEdit()
-        self.okx_passphrase_edit.setPlaceholderText("Passphrase")
-        form_layout.addRow("Passphrase:", self.okx_passphrase_edit)
-        
-        okx_layout.addLayout(form_layout)
-        
-        btn_layout = QHBoxLayout()
-        save_okx_btn = PushButton("저장")
-        save_okx_btn.clicked.connect(self._save_okx_credentials)
-        btn_layout.addWidget(save_okx_btn)
-        
-        test_okx_btn = PushButton("연동 테스트")
-        test_okx_btn.clicked.connect(self._test_okx_connection)
-        btn_layout.addWidget(test_okx_btn)
-        btn_layout.addStretch()
-        
-        okx_layout.addLayout(btn_layout)
-        
-        layout.addWidget(okx_card)
-        
-        # GPT 카드
-        gpt_card = CardWidget()
-        gpt_layout = QVBoxLayout(gpt_card)
-        
-        gpt_title = SubtitleLabel("GPT API 연동")
-        gpt_layout.addWidget(gpt_title)
-        
-        gpt_form = QFormLayout()
-        gpt_form.setSpacing(10)
-        
-        self.gpt_api_key_edit = PasswordLineEdit()
-        self.gpt_api_key_edit.setPlaceholderText("API Key")
-        gpt_form.addRow("API Key:", self.gpt_api_key_edit)
-        
-        gpt_layout.addLayout(gpt_form)
-        
-        gpt_btn_layout = QHBoxLayout()
-        save_gpt_btn = PushButton("저장")
-        save_gpt_btn.clicked.connect(self._save_gpt_credentials)
-        gpt_btn_layout.addWidget(save_gpt_btn)
-        
-        test_gpt_btn = PushButton("연동 테스트")
-        test_gpt_btn.clicked.connect(self._test_gpt_connection)
-        gpt_btn_layout.addWidget(test_gpt_btn)
-        gpt_btn_layout.addStretch()
-        
-        gpt_layout.addLayout(gpt_btn_layout)
-        
-        layout.addWidget(gpt_card)
-        layout.addStretch()
-        
-        return widget
+        self.pivot.setCurrentItem("exchange")
     
     def _create_exchange_widget(self) -> QWidget:
-        """거래소 설정 위젯"""
+        """거래소 연동"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(20)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
         
-        # 안내 카드
-        guide_card = CardWidget()
-        guide_layout = QVBoxLayout(guide_card)
+        # 거래소 선택
+        layout.addWidget(SubtitleLabel("거래소 선택"))
         
-        guide_title = SubtitleLabel("OKX 계정 설정 가이드")
-        guide_layout.addWidget(guide_title)
+        info = BodyLabel(f"{len(ALL_EXCHANGE_IDS)}개 거래소 지원")
+        info.setStyleSheet("color: #7f8c8d; font-size: 10px;")
+        layout.addWidget(info)
         
-        guide_text = BodyLabel(
-            "봇을 사용하기 위해서는 다음 설정이 필요합니다:\n\n"
-            "• Account mode = 2, 3, 또는 4 (선물 거래 모드)\n"
-            "  - 2: Single-currency margin\n"
-            "  - 3: Multi-currency margin\n"
-            "  - 4: Portfolio margin\n"
-            "• Position mode = Hedge mode (long_short_mode)\n\n"
-            "아래 버튼으로 현재 설정을 확인하고 필요 시 자동 변경할 수 있습니다."
-        )
-        guide_layout.addWidget(guide_text)
+        self.exchange_combo = ComboBox()
+        self.exchange_combo.setFixedHeight(32)
+        for ex_id in self.exchange_ids:
+            ex_info = SUPPORTED_EXCHANGES.get(ex_id, {})
+            self.exchange_combo.addItem(f"{ex_info.get('name', ex_id)} (#{ex_info.get('rank', 999)})")
+        try:
+            self.exchange_combo.setCurrentIndex(self.exchange_ids.index(DEFAULT_EXCHANGE_ID))
+        except:
+            self.exchange_combo.setCurrentIndex(0)
+        layout.addWidget(self.exchange_combo)
         
-        layout.addWidget(guide_card)
+        # 테스트넷
+        testnet_row = QHBoxLayout()
+        testnet_row.setSpacing(5)
+        testnet_row.addWidget(BodyLabel("테스트넷:"))
+        self.testnet_switch = SwitchButton()
+        testnet_row.addWidget(self.testnet_switch)
+        self.testnet_label = BodyLabel("메인넷")
+        self.testnet_label.setStyleSheet("color: #27ae60; font-size: 10px;")
+        testnet_row.addWidget(self.testnet_label)
+        testnet_row.addStretch()
+        layout.addLayout(testnet_row)
         
-        # 설정 확인 카드
-        check_card = CardWidget()
-        check_layout = QVBoxLayout(check_card)
+        self._add_line(layout)
         
-        check_title = SubtitleLabel("설정 상태 확인")
-        check_layout.addWidget(check_title)
+        # API 입력
+        self.api_title = SubtitleLabel("API 연동")
+        layout.addWidget(self.api_title)
         
-        self.account_mode_label = BodyLabel("Account Mode: 확인 필요")
-        check_layout.addWidget(self.account_mode_label)
+        form = QFormLayout()
+        form.setSpacing(3)
+        form.setContentsMargins(0, 0, 0, 0)
         
-        self.position_mode_label = BodyLabel("Position Mode: 확인 필요")
-        check_layout.addWidget(self.position_mode_label)
+        self.api_key_edit = LineEdit()
+        self.api_key_edit.setPlaceholderText("API Key")
+        self.api_key_edit.setFixedHeight(28)
+        form.addRow("API Key:", self.api_key_edit)
         
-        btn_layout = QHBoxLayout()
+        self.secret_edit = PasswordLineEdit()
+        self.secret_edit.setPlaceholderText("Secret")
+        self.secret_edit.setFixedHeight(28)
+        form.addRow("Secret:", self.secret_edit)
         
-        check_btn = PushButton("설정 상태 확인")
-        check_btn.clicked.connect(self._check_account_config)
-        btn_layout.addWidget(check_btn)
+        self.passphrase_edit = PasswordLineEdit()
+        self.passphrase_edit.setPlaceholderText("Passphrase")
+        self.passphrase_edit.setFixedHeight(28)
+        self.passphrase_label = QLabel("Passphrase:")
+        form.addRow(self.passphrase_label, self.passphrase_edit)
         
-        self.auto_fix_btn = PushButton("자동 변경 시도")
-        self.auto_fix_btn.setEnabled(False)
-        self.auto_fix_btn.clicked.connect(self._auto_fix_settings)
-        btn_layout.addWidget(self.auto_fix_btn)
+        layout.addLayout(form)
         
-        btn_layout.addStretch()
+        # 버튼
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(5)
         
-        check_layout.addLayout(btn_layout)
+        save_btn = PushButton("저장")
+        save_btn.setFixedHeight(28)
+        save_btn.clicked.connect(self._save_credentials)
+        btn_row.addWidget(save_btn)
         
-        layout.addWidget(check_card)
+        test_btn = PushButton("테스트")
+        test_btn.setFixedHeight(28)
+        test_btn.clicked.connect(self._test_connection)
+        btn_row.addWidget(test_btn)
+        
+        del_btn = PushButton("삭제")
+        del_btn.setFixedHeight(28)
+        del_btn.clicked.connect(self._delete_credentials)
+        btn_row.addWidget(del_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+        
+        self._add_line(layout)
+        
+        # 계정 설정 확인
+        layout.addWidget(SubtitleLabel("계정 설정 확인"))
+        
+        info2 = BodyLabel("Hedge Mode 권장")
+        info2.setStyleSheet("color: #7f8c8d; font-size: 10px;")
+        layout.addWidget(info2)
+        
+        acct_ex_row = QHBoxLayout()
+        acct_ex_row.setSpacing(5)
+        acct_ex_row.addWidget(BodyLabel("거래소:"))
+        self.settings_ex_combo = ComboBox()
+        self.settings_ex_combo.setFixedHeight(28)
+        for ex_id in self.exchange_ids:
+            ex_info = SUPPORTED_EXCHANGES.get(ex_id, {})
+            self.settings_ex_combo.addItem(f"{ex_info.get('name', ex_id)}")
+        acct_ex_row.addWidget(self.settings_ex_combo)
+        acct_ex_row.addStretch()
+        layout.addLayout(acct_ex_row)
+        
+        self.acct_label = BodyLabel("Account: -")
+        self.acct_label.setStyleSheet("font-size: 11px;")
+        layout.addWidget(self.acct_label)
+        
+        self.pos_label = BodyLabel("Position: -")
+        self.pos_label.setStyleSheet("font-size: 11px;")
+        layout.addWidget(self.pos_label)
+        
+        acct_btn_row = QHBoxLayout()
+        acct_btn_row.setSpacing(5)
+        
+        check_btn = PushButton("확인")
+        check_btn.setFixedHeight(28)
+        check_btn.clicked.connect(self._check_config)
+        acct_btn_row.addWidget(check_btn)
+        
+        self.fix_btn = PushButton("자동 수정")
+        self.fix_btn.setFixedHeight(28)
+        self.fix_btn.setEnabled(False)
+        self.fix_btn.clicked.connect(self._fix_config)
+        acct_btn_row.addWidget(self.fix_btn)
+        acct_btn_row.addStretch()
+        
+        layout.addLayout(acct_btn_row)
+        
+        self._add_line(layout)
+        
+        # 연동 상태
+        layout.addWidget(SubtitleLabel("연동 상태"))
+        self.status_grid = QGridLayout()
+        self.status_grid.setSpacing(3)
+        self._update_status_grid()
+        layout.addLayout(self.status_grid)
+        
+        layout.addStretch()
+        scroll.setWidget(widget)
+        return scroll
+    
+    def _create_gpt_widget(self) -> QWidget:
+        """GPT"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+        
+        layout.addWidget(SubtitleLabel("GPT API 연동"))
+        
+        info = BodyLabel("선택 사항 - AI 분석 기능")
+        info.setStyleSheet("color: #7f8c8d; font-size: 10px;")
+        layout.addWidget(info)
+        
+        form = QFormLayout()
+        form.setSpacing(3)
+        
+        self.gpt_api_key_edit = PasswordLineEdit()
+        self.gpt_api_key_edit.setPlaceholderText("OpenAI API Key")
+        self.gpt_api_key_edit.setFixedHeight(28)
+        form.addRow("API Key:", self.gpt_api_key_edit)
+        
+        layout.addLayout(form)
+        
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(5)
+        
+        save_btn = PushButton("저장")
+        save_btn.setFixedHeight(28)
+        save_btn.clicked.connect(self._save_gpt)
+        btn_row.addWidget(save_btn)
+        
+        test_btn = PushButton("테스트")
+        test_btn.setFixedHeight(28)
+        test_btn.clicked.connect(self._test_gpt)
+        btn_row.addWidget(test_btn)
+        btn_row.addStretch()
+        
+        layout.addLayout(btn_row)
         layout.addStretch()
         
         return widget
+    
+    def _add_line(self, layout):
+        """구분선"""
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("background: #4a5080;")
+        line.setFixedHeight(1)
+        layout.addWidget(line)
+    
+    def _on_exchange_changed(self, index: int):
+        """거래소 변경"""
+        if index < 0 or index >= len(self.exchange_ids):
+            return
+        
+        self.current_exchange_id = self.exchange_ids[index]
+        self._update_ui()
+        self._load_credentials()
+    
+    def _on_testnet_changed(self, checked: bool):
+        """테스트넷 변경"""
+        ex = SUPPORTED_EXCHANGES.get(self.current_exchange_id, {})
+        
+        if checked and not ex.get('has_testnet'):
+            self.testnet_switch.setChecked(False)
+            InfoBar.warning("미지원", f"{ex.get('name')} 테스트넷 미지원", parent=self)
+            return
+        
+        self.is_testnet = checked
+        self._update_ui()
+        
+        separate = ex.get('testnet_separate_api', False)
+        if not separate and checked:
+            InfoBar.info("메인넷 키 사용", f"{ex.get('name')}은 메인넷 키 공유", parent=self)
+        elif separate or not checked:
+            self._load_credentials()
+    
+    def _update_ui(self):
+        """UI 업데이트"""
+        ex = SUPPORTED_EXCHANGES.get(self.current_exchange_id, {})
+        name = ex.get('name', self.current_exchange_id)
+        
+        mode = " (테스트넷)" if self.is_testnet else ""
+        self.api_title.setText(f"{name} API{mode}")
+        
+        needs_pass = ex.get('requires_passphrase', False)
+        self.passphrase_edit.setVisible(needs_pass)
+        self.passphrase_label.setVisible(needs_pass)
+        
+        if self.is_testnet:
+            url = ex.get('testnet_url', '')
+            self.testnet_label.setText(f"테스트넷 - {url}")
+            self.testnet_label.setStyleSheet("color: #f39c12; font-size: 10px;")
+        else:
+            self.testnet_label.setText("메인넷")
+            self.testnet_label.setStyleSheet("color: #27ae60; font-size: 10px;")
     
     def _load_credentials(self):
         """자격증명 로드"""
-        okx_creds = self.credential_manager.get_okx_credentials()
-        self.okx_api_key_edit.setText(okx_creds.get('api_key', ''))
-        self.okx_secret_edit.setText(okx_creds.get('secret', ''))
-        self.okx_passphrase_edit.setText(okx_creds.get('passphrase', ''))
+        ex = SUPPORTED_EXCHANGES.get(self.current_exchange_id, {})
+        separate = ex.get('testnet_separate_api', False)
         
-        gpt_creds = self.credential_manager.get_gpt_credentials()
-        self.gpt_api_key_edit.setText(gpt_creds.get('api_key', ''))
+        use_testnet = self.is_testnet and separate
+        
+        creds = self.credential_manager.get_exchange_credentials(
+            self.current_exchange_id, 
+            is_testnet=use_testnet
+        )
+        
+        self.api_key_edit.setText(creds.get('api_key', ''))
+        self.secret_edit.setText(creds.get('secret', ''))
+        self.passphrase_edit.setText(creds.get('passphrase', ''))
+        
+        gpt = self.credential_manager.get_gpt_credentials()
+        self.gpt_api_key_edit.setText(gpt.get('api_key', ''))
     
-    def _save_okx_credentials(self):
-        """OKX 자격증명 저장"""
-        api_key = self.okx_api_key_edit.text().strip()
-        secret = self.okx_secret_edit.text().strip()
-        passphrase = self.okx_passphrase_edit.text().strip()
+    def _save_credentials(self):
+        """저장"""
+        api_key = self.api_key_edit.text().strip()
+        secret = self.secret_edit.text().strip()
+        passphrase = self.passphrase_edit.text().strip()
         
-        if not all([api_key, secret, passphrase]):
-            InfoBar.warning(
-                title="입력 오류",
-                content="모든 필드를 입력해주세요.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+        if not api_key or not secret:
+            InfoBar.warning("입력 필요", "API Key/Secret 필수", parent=self)
             return
         
-        self.credential_manager.update_okx_credentials(api_key, secret, passphrase)
-        logger.info("Settings", "OKX 자격증명 저장 완료")
-        
-        InfoBar.success(
-            title="저장 완료",
-            content="OKX API 자격증명이 저장되었습니다.",
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            parent=self
-        )
+        try:
+            ex = SUPPORTED_EXCHANGES.get(self.current_exchange_id, {})
+            separate = ex.get('testnet_separate_api', False)
+            
+            self.credential_manager.save_exchange_credentials(
+                self.current_exchange_id, api_key, secret, passphrase, False
+            )
+            
+            if self.is_testnet and separate:
+                self.credential_manager.save_exchange_credentials(
+                    self.current_exchange_id, api_key, secret, passphrase, True
+                )
+            
+            self._update_status_grid()
+            
+            mode = "테스트넷" if (self.is_testnet and separate) else "메인넷"
+            InfoBar.success("저장 완료", f"{ex.get('name')} ({mode})", parent=self)
+            
+        except Exception as e:
+            InfoBar.error("저장 실패", str(e), duration=-1, parent=self)
     
-    def _save_gpt_credentials(self):
-        """GPT 자격증명 저장"""
+    def _test_connection(self):
+        """연결 테스트"""
+        api_key = self.api_key_edit.text().strip()
+        secret = self.secret_edit.text().strip()
+        passphrase = self.passphrase_edit.text().strip()
+        
+        if not api_key or not secret:
+            InfoBar.warning("입력 필요", "API Key/Secret 입력", parent=self)
+            return
+        
+        try:
+            from api.ccxt_client import CCXTClient
+            
+            client = CCXTClient(
+                self.current_exchange_id, api_key, secret, passphrase, self.is_testnet
+            )
+            
+            success, msg = client.test_connection()
+            
+            if success:
+                InfoBar.success("연동 성공", msg, parent=self)
+            else:
+                InfoBar.error("연동 실패", msg, duration=-1, parent=self)
+                
+        except Exception as e:
+            InfoBar.error("오류", str(e), duration=-1, parent=self)
+    
+    def _delete_credentials(self):
+        """삭제"""
+        try:
+            ex = SUPPORTED_EXCHANGES.get(self.current_exchange_id, {})
+            separate = ex.get('testnet_separate_api', False)
+            
+            use_testnet = self.is_testnet and separate
+            
+            self.credential_manager.delete_exchange_credentials(
+                self.current_exchange_id, use_testnet
+            )
+            
+            self.api_key_edit.clear()
+            self.secret_edit.clear()
+            self.passphrase_edit.clear()
+            
+            self._update_status_grid()
+            
+            InfoBar.success("삭제 완료", f"{ex.get('name')}", parent=self)
+            
+        except Exception as e:
+            InfoBar.error("삭제 실패", str(e), duration=-1, parent=self)
+    
+    def _update_status_grid(self):
+        """상태 그리드"""
+        while self.status_grid.count():
+            item = self.status_grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        h_ex = BodyLabel("거래소")
+        h_ex.setStyleSheet("font-size: 10px; font-weight: bold;")
+        h_main = BodyLabel("메인")
+        h_main.setStyleSheet("font-size: 10px; font-weight: bold;")
+        h_test = BodyLabel("테스트")
+        h_test.setStyleSheet("font-size: 10px; font-weight: bold;")
+        
+        self.status_grid.addWidget(h_ex, 0, 0)
+        self.status_grid.addWidget(h_main, 0, 1)
+        self.status_grid.addWidget(h_test, 0, 2)
+        
+        top = ["binance", "bybit", "okx", "bitget", "gate", "kucoin", "htx", "kraken"]
+        
+        row = 1
+        for ex_id in top:
+            if ex_id not in SUPPORTED_EXCHANGES:
+                continue
+            
+            ex = SUPPORTED_EXCHANGES[ex_id]
+            
+            name_lbl = BodyLabel(ex['name'])
+            name_lbl.setStyleSheet("font-size: 10px;")
+            self.status_grid.addWidget(name_lbl, row, 0)
+            
+            m_creds = self.credential_manager.get_exchange_credentials(ex_id, False)
+            m_lbl = BodyLabel("✅" if m_creds.get('api_key') else "❌")
+            m_lbl.setStyleSheet("font-size: 10px;")
+            self.status_grid.addWidget(m_lbl, row, 1)
+            
+            if ex.get('has_testnet'):
+                t_creds = self.credential_manager.get_exchange_credentials(ex_id, True)
+                t_lbl = BodyLabel("✅" if t_creds.get('api_key') else "❌")
+            else:
+                t_lbl = BodyLabel("-")
+            t_lbl.setStyleSheet("font-size: 10px;")
+            self.status_grid.addWidget(t_lbl, row, 2)
+            
+            row += 1
+    
+    def _save_gpt(self):
+        """GPT 저장"""
         api_key = self.gpt_api_key_edit.text().strip()
-        
         if not api_key:
-            InfoBar.warning(
-                title="입력 오류",
-                content="API Key를 입력해주세요.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+            InfoBar.warning("입력 필요", "API Key 필요", parent=self)
             return
         
-        self.credential_manager.update_gpt_credentials(api_key)
-        logger.info("Settings", "GPT 자격증명 저장 완료")
-        
-        InfoBar.success(
-            title="저장 완료",
-            content="GPT API 자격증명이 저장되었습니다.",
-            orient=Qt.Horizontal,
-            isClosable=True,
-            position=InfoBarPosition.TOP,
-            parent=self
-        )
+        try:
+            self.credential_manager.save_gpt_credentials(api_key)
+            InfoBar.success("저장 완료", "GPT API 저장됨", parent=self)
+        except Exception as e:
+            InfoBar.error("저장 실패", str(e), duration=-1, parent=self)
     
-    def _test_okx_connection(self):
-        """OKX 연결 테스트"""
-        creds = self.credential_manager.get_okx_credentials()
-        
-        if not all(creds.values()):
-            InfoBar.warning(
-                title="자격증명 없음",
-                content="먼저 OKX API 자격증명을 저장해주세요.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+    def _test_gpt(self):
+        """GPT 테스트"""
+        api_key = self.gpt_api_key_edit.text().strip()
+        if not api_key:
+            InfoBar.warning("입력 필요", "API Key 필요", parent=self)
             return
         
-        client = OKXClient(
-            creds['api_key'],
-            creds['secret'],
-            creds['passphrase']
-        )
-        
-        success, message = client.test_connection()
-        
-        if success:
-            InfoBar.success(
-                title="연동 성공",
-                content=message,
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
-            self.okx_client = client
-        else:
-            InfoBar.error(
-                title="연동 실패",
-                content=message,
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+        try:
+            self.gpt_client.api_key = api_key
+            success, msg = self.gpt_client.test_connection()
+            
+            if success:
+                InfoBar.success("연동 성공", msg, parent=self)
+            else:
+                InfoBar.error("연동 실패", msg, duration=-1, parent=self)
+        except Exception as e:
+            InfoBar.error("오류", str(e), duration=-1, parent=self)
     
-    def _test_gpt_connection(self):
-        """GPT 연결 테스트"""
-        creds = self.credential_manager.get_gpt_credentials()
-        
-        if not creds.get('api_key'):
-            InfoBar.warning(
-                title="자격증명 없음",
-                content="먼저 GPT API 자격증명을 저장해주세요.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+    def _check_config(self):
+        """설정 확인"""
+        index = self.settings_ex_combo.currentIndex()
+        if index < 0:
             return
         
-        self.gpt_client.set_api_key(creds['api_key'])
-        success, message = self.gpt_client.test_connection()
+        ex_id = self.exchange_ids[index]
         
-        if success:
-            InfoBar.success(
-                title="연동 성공",
-                content=message,
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
-        else:
-            InfoBar.error(
-                title="연동 실패",
-                content=message,
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+        try:
+            factory = get_exchange_factory()
+            client = factory.get_client(ex_id)
+            
+            if not client:
+                InfoBar.warning("연동 필요", f"{ex_id} API 먼저 연동", parent=self)
+                return
+            
+            config = client.get_account_config()
+            
+            if config:
+                self.acct_label.setText(f"Account: {config.get('acct_lv', 'N/A')}")
+                self.pos_label.setText(f"Position: {config.get('pos_mode', 'N/A')}")
+                
+                needs_fix = config.get('pos_mode') != 'long_short_mode'
+                self.fix_btn.setEnabled(needs_fix)
+                
+                if not needs_fix:
+                    InfoBar.success("설정 확인", "올바른 설정", parent=self)
+            else:
+                self.acct_label.setText("Account: 조회 실패")
+                self.pos_label.setText("Position: 조회 실패")
+                
+        except Exception as e:
+            InfoBar.error("확인 실패", str(e), duration=-1, parent=self)
     
-    def _check_account_config(self):
-        """계정 설정 확인"""
-        if not self.okx_client:
-            InfoBar.warning(
-                title="OKX 미연동",
-                content="먼저 OKX API 연동을 완료해주세요.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
+    def _fix_config(self):
+        """설정 수정"""
+        index = self.settings_ex_combo.currentIndex()
+        if index < 0:
             return
         
-        config = self.okx_client.get_account_config()
+        ex_id = self.exchange_ids[index]
         
-        if not config:
-            InfoBar.error(
-                title="조회 실패",
-                content="계정 설정 조회에 실패했습니다.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
-            return
-        
-        acct_lv = config.get('acctLv')
-        pos_mode = config.get('posMode')
-        
-        self.account_mode_label.setText(f"Account Mode: {acct_lv}")
-        self.position_mode_label.setText(f"Position Mode: {pos_mode}")
-        
-        # 권장 설정과 비교
-        need_fix = False
-        if acct_lv not in ["2", "3", "4"]:  # 선물 거래 가능 모드
-            self.account_mode_label.setStyleSheet("color: #e74c3c;")
-            need_fix = True
-        else:
-            self.account_mode_label.setStyleSheet("color: #2ecc71;")
-        
-        if pos_mode != "long_short_mode":
-            self.position_mode_label.setStyleSheet("color: #e74c3c;")
-            need_fix = True
-        else:
-            self.position_mode_label.setStyleSheet("color: #2ecc71;")
-        
-        self.auto_fix_btn.setEnabled(need_fix)
-        
-        if not need_fix:
-            InfoBar.success(
-                title="설정 확인 완료",
-                content="모든 설정이 권장 값으로 설정되어 있습니다.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
-    
-    def _auto_fix_settings(self):
-        """설정 자동 변경"""
-        if not self.okx_client:
-            return
-        
-        # Account mode 변경 (Single-currency margin mode)
-        success1 = self.okx_client.set_account_mode(acct_lv=2)
-        
-        # Position mode 변경 (hedge mode)
-        success2 = self.okx_client.set_position_mode(pos_mode="long_short_mode")
-        
-        if success1 and success2:
-            InfoBar.success(
-                title="변경 완료",
-                content="계정 설정이 권장 값으로 변경되었습니다.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
-            # 재확인
-            self._check_account_config()
-        else:
-            InfoBar.error(
-                title="변경 실패",
-                content="설정 변경에 실패했습니다. 로그를 확인해주세요.",
-                orient=Qt.Horizontal,
-                isClosable=True,
-                position=InfoBarPosition.TOP,
-                parent=self
-            )
-
-
+        try:
+            factory = get_exchange_factory()
+            client = factory.get_client(ex_id)
+            
+            if client and client.set_hedge_mode():
+                InfoBar.success("설정 변경", "Hedge Mode 설정됨", parent=self)
+                self._check_config()
+            else:
+                InfoBar.warning("변경 실패", "거래소에서 직접 변경 필요", parent=self)
+        except Exception as e:
+            InfoBar.error("오류", str(e), duration=-1, parent=self)
