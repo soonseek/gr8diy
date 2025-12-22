@@ -1,5 +1,5 @@
 """
-봇 조건설정 위젯
+Bot Conditions Widget
 """
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QScrollArea, QFrame
@@ -13,7 +13,7 @@ from qfluentwidgets import (
 
 from database.repository import BotConfigsRepository, ActiveSymbolsRepository
 from config.settings import BOT_INTERVALS, MAX_LEVERAGE, MAX_MARTINGALE_STEPS, CREDENTIALS_PATH
-from config.exchanges import SUPPORTED_EXCHANGES, ALL_EXCHANGE_IDS, DEFAULT_EXCHANGE_ID
+from config.exchanges import SUPPORTED_EXCHANGES, ALL_EXCHANGE_IDS, DEFAULT_EXCHANGE_ID, DEFAULT_SYMBOLS
 from utils.logger import logger
 from utils.crypto import CredentialManager
 from api.exchange_factory import get_exchange_factory
@@ -21,7 +21,7 @@ from workers.trading_bot import TradingBotWorker
 
 
 class BotConditionsWidget(QWidget):
-    """봇 조건설정 위젯"""
+    """Bot Conditions Widget"""
     
     bot_started = Signal()
     
@@ -44,36 +44,36 @@ class BotConditionsWidget(QWidget):
         QTimer.singleShot(2000, self._auto_restore_bots)
     
     def _init_ui(self):
-        """UI"""
+        """Initialize UI"""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-        
+
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
-        
-        # 거래소 선택
-        layout.addWidget(SubtitleLabel("거래소 선택"))
-        
+
+        # Exchange selection
+        layout.addWidget(SubtitleLabel("Exchange Selection"))
+
         ex_row = QHBoxLayout()
         ex_row.setSpacing(5)
-        ex_row.addWidget(BodyLabel("거래소:"))
-        
-        # 연동된 거래소만
+        ex_row.addWidget(BodyLabel("Exchange:"))
+
+        # Only configured exchanges
         self.configured_exchanges = []
         for ex_id in ALL_EXCHANGE_IDS:
             creds = self.credential_manager.get_exchange_credentials(ex_id, is_testnet=False)
             if creds.get('api_key'):
                 self.configured_exchanges.append(ex_id)
-        
+
         self.exchange_combo = ComboBox()
         self.exchange_combo.setFixedHeight(32)
-        
+
         if not self.configured_exchanges:
-            self.exchange_combo.addItem("⚠ 연동된 거래소 없음")
+            self.exchange_combo.addItem("⚠ No Configured Exchanges")
             self.exchange_combo.setEnabled(False)
         else:
             for ex_id in self.configured_exchanges:
@@ -94,9 +94,9 @@ class BotConditionsWidget(QWidget):
         layout.addLayout(ex_row)
         
         self._add_line(layout)
-        
-        # 종목 설정
-        layout.addWidget(SubtitleLabel("종목 설정"))
+
+        # Symbol settings
+        layout.addWidget(SubtitleLabel("Symbol Settings"))
         
         bal_row = QHBoxLayout()
         bal_row.setSpacing(5)
@@ -148,6 +148,8 @@ class BotConditionsWidget(QWidget):
         layout.addLayout(header)
         
         # 심볼 목록
+        # 기본 심볼이 없으면 초기화
+        self.symbols_repo.init_default_symbols(self.exchange_id, DEFAULT_SYMBOLS)
         active_symbols = self.symbols_repo.get_active_symbols(self.exchange_id)
         self.symbol_configs = {}
         

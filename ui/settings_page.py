@@ -1,5 +1,5 @@
 """
-설정 페이지 - 거래소 연동 + GPT
+Settings Page - Exchange Integration + GPT
 """
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QStackedWidget,
@@ -23,7 +23,7 @@ from utils.logger import logger
 
 
 class SettingsPage(QWidget):
-    """설정 페이지"""
+    """Settings Page"""
     
     def __init__(self):
         super().__init__()
@@ -59,11 +59,14 @@ class SettingsPage(QWidget):
         exchange_widget = self._create_exchange_widget()
         gpt_widget = self._create_gpt_widget()
         
-        self.pivot.addItem("exchange", "거래소 연동", lambda: self.stack_widget.setCurrentIndex(0), icon=FluentIcon.CONNECT)
+        self.pivot.addItem("exchange", "Exchange Integration", lambda: self.stack_widget.setCurrentIndex(0), icon=FluentIcon.CONNECT)
         self.pivot.addItem("gpt", "GPT", lambda: self.stack_widget.setCurrentIndex(1), icon=FluentIcon.ROBOT)
+        self.pivot.addItem("ui", "UI Settings", lambda: self.stack_widget.setCurrentIndex(2), icon=FluentIcon.SETTING)
         
         self.stack_widget.addWidget(exchange_widget)
         self.stack_widget.addWidget(gpt_widget)
+        ui_widget = self._create_ui_widget()
+        self.stack_widget.addWidget(ui_widget)
         
         layout.addLayout(pivot_layout)
         layout.addWidget(self.stack_widget)
@@ -71,7 +74,7 @@ class SettingsPage(QWidget):
         self.pivot.setCurrentItem("exchange")
     
     def _create_exchange_widget(self) -> QWidget:
-        """거래소 연동"""
+        """Exchange Integration"""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -82,15 +85,36 @@ class SettingsPage(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
         
-        # 거래소 선택
-        layout.addWidget(SubtitleLabel("거래소 선택"))
-        
-        info = BodyLabel(f"{len(ALL_EXCHANGE_IDS)}개 거래소 지원")
+        # Exchange selection
+        layout.addWidget(SubtitleLabel("Exchange Selection"))
+
+        info = BodyLabel(f"Supports {len(ALL_EXCHANGE_IDS)} exchanges")
         info.setStyleSheet("color: #7f8c8d; font-size: 10px;")
         layout.addWidget(info)
-        
+
         self.exchange_combo = ComboBox()
         self.exchange_combo.setFixedHeight(32)
+        self.exchange_combo.setMinimumWidth(300)
+        self.exchange_combo.setMaximumWidth(400)
+
+        # Apply dropdown style
+        from ui.theme import get_custom_stylesheet
+        self.exchange_combo.setStyleSheet(get_custom_stylesheet())
+
+        # Additional style for width limit
+        width_style = """
+            QComboBox {
+                max-width: 380px;
+                min-width: 280px;
+            }
+            QComboBox QAbstractItemView {
+                max-width: 380px !important;
+                min-width: 280px !important;
+            }
+        """
+        current_style = self.exchange_combo.styleSheet()
+        self.exchange_combo.setStyleSheet(current_style + width_style)
+
         for ex_id in self.exchange_ids:
             ex_info = SUPPORTED_EXCHANGES.get(ex_id, {})
             self.exchange_combo.addItem(f"{ex_info.get('name', ex_id)} (#{ex_info.get('rank', 999)})")
@@ -100,13 +124,13 @@ class SettingsPage(QWidget):
             self.exchange_combo.setCurrentIndex(0)
         layout.addWidget(self.exchange_combo)
         
-        # 테스트넷
+        # Testnet
         testnet_row = QHBoxLayout()
         testnet_row.setSpacing(5)
-        testnet_row.addWidget(BodyLabel("테스트넷:"))
+        testnet_row.addWidget(BodyLabel("Testnet:"))
         self.testnet_switch = SwitchButton()
         testnet_row.addWidget(self.testnet_switch)
-        self.testnet_label = BodyLabel("메인넷")
+        self.testnet_label = BodyLabel("Mainnet")
         self.testnet_label.setStyleSheet("color: #27ae60; font-size: 10px;")
         testnet_row.addWidget(self.testnet_label)
         testnet_row.addStretch()
@@ -114,8 +138,8 @@ class SettingsPage(QWidget):
         
         self._add_line(layout)
         
-        # API 입력
-        self.api_title = SubtitleLabel("API 연동")
+        # API Input
+        self.api_title = SubtitleLabel("API Integration")
         layout.addWidget(self.api_title)
         
         form = QFormLayout()
@@ -140,21 +164,21 @@ class SettingsPage(QWidget):
         
         layout.addLayout(form)
         
-        # 버튼
+        # Buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(5)
-        
-        save_btn = PushButton("저장")
+
+        save_btn = PushButton("Save")
         save_btn.setFixedHeight(28)
         save_btn.clicked.connect(self._save_credentials)
         btn_row.addWidget(save_btn)
-        
-        test_btn = PushButton("테스트")
+
+        test_btn = PushButton("Test")
         test_btn.setFixedHeight(28)
         test_btn.clicked.connect(self._test_connection)
         btn_row.addWidget(test_btn)
-        
-        del_btn = PushButton("삭제")
+
+        del_btn = PushButton("Delete")
         del_btn.setFixedHeight(28)
         del_btn.clicked.connect(self._delete_credentials)
         btn_row.addWidget(del_btn)
@@ -163,16 +187,16 @@ class SettingsPage(QWidget):
         
         self._add_line(layout)
         
-        # 계정 설정 확인
-        layout.addWidget(SubtitleLabel("계정 설정 확인"))
-        
-        info2 = BodyLabel("Hedge Mode 권장")
+        # Account Settings Verification
+        layout.addWidget(SubtitleLabel("Account Settings Verification"))
+
+        info2 = BodyLabel("Hedge Mode Recommended")
         info2.setStyleSheet("color: #7f8c8d; font-size: 10px;")
         layout.addWidget(info2)
-        
+
         acct_ex_row = QHBoxLayout()
         acct_ex_row.setSpacing(5)
-        acct_ex_row.addWidget(BodyLabel("거래소:"))
+        acct_ex_row.addWidget(BodyLabel("Exchange:"))
         self.settings_ex_combo = ComboBox()
         self.settings_ex_combo.setFixedHeight(28)
         for ex_id in self.exchange_ids:
@@ -193,24 +217,24 @@ class SettingsPage(QWidget):
         acct_btn_row = QHBoxLayout()
         acct_btn_row.setSpacing(5)
         
-        check_btn = PushButton("확인")
+        check_btn = PushButton("Check")
         check_btn.setFixedHeight(28)
         check_btn.clicked.connect(self._check_config)
         acct_btn_row.addWidget(check_btn)
-        
-        self.fix_btn = PushButton("자동 수정")
+
+        self.fix_btn = PushButton("Auto Fix")
         self.fix_btn.setFixedHeight(28)
         self.fix_btn.setEnabled(False)
         self.fix_btn.clicked.connect(self._fix_config)
         acct_btn_row.addWidget(self.fix_btn)
         acct_btn_row.addStretch()
-        
+
         layout.addLayout(acct_btn_row)
-        
+
         self._add_line(layout)
-        
-        # 연동 상태
-        layout.addWidget(SubtitleLabel("연동 상태"))
+
+        # Integration Status
+        layout.addWidget(SubtitleLabel("Integration Status"))
         self.status_grid = QGridLayout()
         self.status_grid.setSpacing(3)
         self._update_status_grid()
@@ -227,9 +251,9 @@ class SettingsPage(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
         
-        layout.addWidget(SubtitleLabel("GPT API 연동"))
-        
-        info = BodyLabel("선택 사항 - AI 분석 기능")
+        layout.addWidget(SubtitleLabel("GPT API Integration"))
+
+        info = BodyLabel("Optional - AI Analysis Features")
         info.setStyleSheet("color: #7f8c8d; font-size: 10px;")
         layout.addWidget(info)
         
@@ -246,24 +270,24 @@ class SettingsPage(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(5)
         
-        save_btn = PushButton("저장")
+        save_btn = PushButton("Save")
         save_btn.setFixedHeight(28)
         save_btn.clicked.connect(self._save_gpt)
         btn_row.addWidget(save_btn)
-        
-        test_btn = PushButton("테스트")
+
+        test_btn = PushButton("Test")
         test_btn.setFixedHeight(28)
         test_btn.clicked.connect(self._test_gpt)
         btn_row.addWidget(test_btn)
         btn_row.addStretch()
-        
+
         layout.addLayout(btn_row)
         layout.addStretch()
-        
+
         return widget
-    
+
     def _add_line(self, layout):
-        """구분선"""
+        """Separator line"""
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
         line.setStyleSheet("background: #4a5080;")
@@ -271,7 +295,7 @@ class SettingsPage(QWidget):
         layout.addWidget(line)
     
     def _on_exchange_changed(self, index: int):
-        """거래소 변경"""
+        """Exchange change"""
         if index < 0 or index >= len(self.exchange_ids):
             return
         
@@ -280,12 +304,12 @@ class SettingsPage(QWidget):
         self._load_credentials()
     
     def _on_testnet_changed(self, checked: bool):
-        """테스트넷 변경"""
+        """Testnet change"""
         ex = SUPPORTED_EXCHANGES.get(self.current_exchange_id, {})
-        
+
         if checked and not ex.get('has_testnet'):
             self.testnet_switch.setChecked(False)
-            InfoBar.warning("미지원", f"{ex.get('name')} 테스트넷 미지원", parent=self)
+            InfoBar.warning("Not Supported", f"{ex.get('name')} testnet not supported", parent=self)
             return
         
         self.is_testnet = checked
@@ -293,32 +317,32 @@ class SettingsPage(QWidget):
         
         separate = ex.get('testnet_separate_api', False)
         if not separate and checked:
-            InfoBar.info("메인넷 키 사용", f"{ex.get('name')}은 메인넷 키 공유", parent=self)
+            InfoBar.info("Using Mainnet Keys", f"{ex.get('name')} shares mainnet keys", parent=self)
         elif separate or not checked:
             self._load_credentials()
-    
+
     def _update_ui(self):
-        """UI 업데이트"""
+        """UI update"""
         ex = SUPPORTED_EXCHANGES.get(self.current_exchange_id, {})
         name = ex.get('name', self.current_exchange_id)
-        
-        mode = " (테스트넷)" if self.is_testnet else ""
+
+        mode = " (Testnet)" if self.is_testnet else ""
         self.api_title.setText(f"{name} API{mode}")
-        
+
         needs_pass = ex.get('requires_passphrase', False)
         self.passphrase_edit.setVisible(needs_pass)
         self.passphrase_label.setVisible(needs_pass)
-        
+
         if self.is_testnet:
             url = ex.get('testnet_url', '')
-            self.testnet_label.setText(f"테스트넷 - {url}")
+            self.testnet_label.setText(f"Testnet - {url}")
             self.testnet_label.setStyleSheet("color: #f39c12; font-size: 10px;")
         else:
-            self.testnet_label.setText("메인넷")
+            self.testnet_label.setText("Mainnet")
             self.testnet_label.setStyleSheet("color: #27ae60; font-size: 10px;")
-    
+
     def _load_credentials(self):
-        """자격증명 로드"""
+        """Load credentials"""
         ex = SUPPORTED_EXCHANGES.get(self.current_exchange_id, {})
         separate = ex.get('testnet_separate_api', False)
         
@@ -337,13 +361,13 @@ class SettingsPage(QWidget):
         self.gpt_api_key_edit.setText(gpt.get('api_key', ''))
     
     def _save_credentials(self):
-        """저장"""
+        """Save"""
         api_key = self.api_key_edit.text().strip()
         secret = self.secret_edit.text().strip()
         passphrase = self.passphrase_edit.text().strip()
-        
+
         if not api_key or not secret:
-            InfoBar.warning("입력 필요", "API Key/Secret 필수", parent=self)
+            InfoBar.warning("Input Required", "API Key/Secret required", parent=self)
             return
         
         try:
@@ -361,20 +385,20 @@ class SettingsPage(QWidget):
             
             self._update_status_grid()
             
-            mode = "테스트넷" if (self.is_testnet and separate) else "메인넷"
-            InfoBar.success("저장 완료", f"{ex.get('name')} ({mode})", parent=self)
-            
+            mode = "Testnet" if (self.is_testnet and separate) else "Mainnet"
+            InfoBar.success("Save Complete", f"{ex.get('name')} ({mode})", parent=self)
+
         except Exception as e:
-            InfoBar.error("저장 실패", str(e), duration=-1, parent=self)
-    
+            InfoBar.error("Save Failed", str(e), duration=-1, parent=self)
+
     def _test_connection(self):
-        """연결 테스트"""
+        """Connection test"""
         api_key = self.api_key_edit.text().strip()
         secret = self.secret_edit.text().strip()
         passphrase = self.passphrase_edit.text().strip()
-        
+
         if not api_key or not secret:
-            InfoBar.warning("입력 필요", "API Key/Secret 입력", parent=self)
+            InfoBar.warning("Input Required", "Enter API Key/Secret", parent=self)
             return
         
         try:
@@ -387,15 +411,15 @@ class SettingsPage(QWidget):
             success, msg = client.test_connection()
             
             if success:
-                InfoBar.success("연동 성공", msg, parent=self)
+                InfoBar.success("Integration Success", msg, parent=self)
             else:
-                InfoBar.error("연동 실패", msg, duration=-1, parent=self)
-                
+                InfoBar.error("Integration Failed", msg, duration=-1, parent=self)
+
         except Exception as e:
-            InfoBar.error("오류", str(e), duration=-1, parent=self)
-    
+            InfoBar.error("Error", str(e), duration=-1, parent=self)
+
     def _delete_credentials(self):
-        """삭제"""
+        """Delete"""
         try:
             ex = SUPPORTED_EXCHANGES.get(self.current_exchange_id, {})
             separate = ex.get('testnet_separate_api', False)
@@ -412,23 +436,23 @@ class SettingsPage(QWidget):
             
             self._update_status_grid()
             
-            InfoBar.success("삭제 완료", f"{ex.get('name')}", parent=self)
-            
+            InfoBar.success("Delete Complete", f"{ex.get('name')}", parent=self)
+
         except Exception as e:
-            InfoBar.error("삭제 실패", str(e), duration=-1, parent=self)
-    
+            InfoBar.error("Delete Failed", str(e), duration=-1, parent=self)
+
     def _update_status_grid(self):
-        """상태 그리드"""
+        """Status grid"""
         while self.status_grid.count():
             item = self.status_grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        
-        h_ex = BodyLabel("거래소")
+
+        h_ex = BodyLabel("Exchange")
         h_ex.setStyleSheet("font-size: 10px; font-weight: bold;")
-        h_main = BodyLabel("메인")
+        h_main = BodyLabel("Main")
         h_main.setStyleSheet("font-size: 10px; font-weight: bold;")
-        h_test = BodyLabel("테스트")
+        h_test = BodyLabel("Test")
         h_test.setStyleSheet("font-size: 10px; font-weight: bold;")
         
         self.status_grid.addWidget(h_ex, 0, 0)
@@ -464,23 +488,23 @@ class SettingsPage(QWidget):
             row += 1
     
     def _save_gpt(self):
-        """GPT 저장"""
+        """GPT Save"""
         api_key = self.gpt_api_key_edit.text().strip()
         if not api_key:
-            InfoBar.warning("입력 필요", "API Key 필요", parent=self)
+            InfoBar.warning("Input Required", "API Key required", parent=self)
             return
-        
+
         try:
             self.credential_manager.save_gpt_credentials(api_key)
-            InfoBar.success("저장 완료", "GPT API 저장됨", parent=self)
+            InfoBar.success("Save Complete", "GPT API saved", parent=self)
         except Exception as e:
-            InfoBar.error("저장 실패", str(e), duration=-1, parent=self)
-    
+            InfoBar.error("Save Failed", str(e), duration=-1, parent=self)
+
     def _test_gpt(self):
-        """GPT 테스트"""
+        """GPT Test"""
         api_key = self.gpt_api_key_edit.text().strip()
         if not api_key:
-            InfoBar.warning("입력 필요", "API Key 필요", parent=self)
+            InfoBar.warning("Input Required", "API Key required", parent=self)
             return
         
         try:
@@ -488,14 +512,14 @@ class SettingsPage(QWidget):
             success, msg = self.gpt_client.test_connection()
             
             if success:
-                InfoBar.success("연동 성공", msg, parent=self)
+                InfoBar.success("Integration Success", msg, parent=self)
             else:
-                InfoBar.error("연동 실패", msg, duration=-1, parent=self)
+                InfoBar.error("Integration Failed", msg, duration=-1, parent=self)
         except Exception as e:
-            InfoBar.error("오류", str(e), duration=-1, parent=self)
-    
+            InfoBar.error("Error", str(e), duration=-1, parent=self)
+
     def _check_config(self):
-        """설정 확인"""
+        """Check configuration"""
         index = self.settings_ex_combo.currentIndex()
         if index < 0:
             return
@@ -547,3 +571,187 @@ class SettingsPage(QWidget):
                 InfoBar.warning("변경 실패", "거래소에서 직접 변경 필요", parent=self)
         except Exception as e:
             InfoBar.error("오류", str(e), duration=-1, parent=self)
+
+    def _create_ui_widget(self) -> QWidget:
+        """UI 설정 위젯"""
+        from qfluentwidgets import CardWidget
+        from PySide6.QtWidgets import QSpinBox, QButtonGroup, QRadioButton, QVBoxLayout, QGroupBox
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(20)
+
+        # 창 설정 카드
+        window_card = CardWidget()
+        window_layout = QVBoxLayout(window_card)
+        window_layout.addWidget(SubtitleLabel("창 설정"))
+
+        # 시작 위치 설정
+        position_layout = QVBoxLayout()
+        position_layout.addWidget(BodyLabel("창 시작 위치:"))
+
+        self.position_group = QButtonGroup()
+        self.position_buttons = {}
+
+        positions = [
+            ("center", "화면 중앙"),
+            ("top_left", "왼쪽 상단"),
+            ("top_right", "오른쪽 상단"),
+            ("bottom_left", "왼쪽 하단"),
+            ("bottom_right", "오른쪽 하단"),
+            ("remember", "마지막 위치 기억")
+        ]
+
+        for value, text in positions:
+            radio = QRadioButton(text)
+            self.position_buttons[value] = radio
+            self.position_group.addButton(radio)
+            position_layout.addWidget(radio)
+
+        window_layout.addLayout(position_layout)
+
+        # 시작 모드 설정
+        mode_layout = QVBoxLayout()
+        mode_layout.addWidget(BodyLabel("시작 모드:"))
+
+        self.mode_group = QButtonGroup()
+        self.mode_buttons = {}
+
+        modes = [
+            ("maximized", "전체 화면 (권장)"),
+            ("fullscreen", "진정한 전체 화면"),
+            ("normal", "일반 크기"),
+            ("remember", "마지막 크기 기억")
+        ]
+
+        for value, text in modes:
+            radio = QRadioButton(text)
+            self.mode_buttons[value] = radio
+            self.mode_group.addButton(radio)
+            mode_layout.addWidget(radio)
+
+        window_layout.addLayout(mode_layout)
+
+        # 디스플레이 선택
+        display_layout = QHBoxLayout()
+        display_layout.addWidget(BodyLabel("기본 디스플레이:"))
+        self.display_combo = ComboBox()
+        self.display_combo.addItems(["기본 디스플레이", "보조 디스플레이 1", "보조 디스플레이 2"])
+        display_layout.addWidget(self.display_combo)
+        display_layout.addStretch()
+
+        window_layout.addLayout(display_layout)
+
+        layout.addWidget(window_card)
+
+        # 적용 버튼
+        apply_btn = PushButton("설정 저장")
+        apply_btn.clicked.connect(self._save_ui_settings)
+        layout.addWidget(apply_btn)
+
+        layout.addStretch()
+
+        # 기본값 설정
+        self._load_ui_settings()
+
+        scroll.setWidget(widget)
+        return scroll
+
+    def _load_ui_settings(self):
+        """UI 설정 로드"""
+        try:
+            import json
+            import os
+
+            settings_file = "config/ui_settings.json"
+            default_settings = {
+                "position": "center",
+                "mode": "maximized",
+                "display": 0
+            }
+
+            if os.path.exists(settings_file):
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+            else:
+                settings = default_settings
+
+            # 위치 설정
+            position = settings.get("position", "center")
+            if position in self.position_buttons:
+                self.position_buttons[position].setChecked(True)
+
+            # 모드 설정
+            mode = settings.get("mode", "maximized")
+            if mode in self.mode_buttons:
+                self.mode_buttons[mode].setChecked(True)
+
+            # 디스플레이 설정
+            display_index = settings.get("display", 0)
+            if 0 <= display_index < self.display_combo.count():
+                self.display_combo.setCurrentIndex(display_index)
+
+        except Exception as e:
+            logger.error("SettingsPage", f"UI 설정 로드 실패: {str(e)}")
+
+    def _save_ui_settings(self):
+        """UI 설정 저장"""
+        try:
+            import json
+            import os
+
+            # 선택된 값 가져오기
+            position = None
+            for value, button in self.position_buttons.items():
+                if button.isChecked():
+                    position = value
+                    break
+
+            mode = None
+            for value, button in self.mode_buttons.items():
+                if button.isChecked():
+                    mode = value
+                    break
+
+            display = self.display_combo.currentIndex()
+
+            settings = {
+                "position": position or "center",
+                "mode": mode or "maximized",
+                "display": display
+            }
+
+            # 폴더 생성
+            os.makedirs("config", exist_ok=True)
+
+            # 설정 저장
+            with open("config/ui_settings.json", 'w', encoding='utf-8') as f:
+                json.dump(settings, f, ensure_ascii=False, indent=2)
+
+            InfoBar.success(
+                title="설정 저장",
+                content="UI 설정이 저장되었습니다. 애플리케이션을 재시작하면 적용됩니다.",
+                orient=Qt.Horizontal,
+                isClosable=True,
+                duration=3000,
+                parent=self
+            )
+
+            logger.info("SettingsPage", f"UI 설정 저장: {settings}")
+
+        except Exception as e:
+            InfoBar.error(
+                title="저장 실패",
+                content=f"UI 설정 저장 실패: {str(e)}",
+                orient=Qt.Horizontal,
+                isClosable=True,
+                duration=-1,
+                parent=self
+            )
+            logger.error("SettingsPage", f"UI 설정 저장 실패: {str(e)}")

@@ -13,12 +13,23 @@ from utils.time_helper import time_helper
 
 class BaseRepository:
     """기본 레포지토리 클래스"""
-    
+
     def __init__(self):
-        self.db = QSqlDatabase.database()
+        # 데이터베이스가 초기화되지 않았을 수 있으므로 안전하게 처리
+        try:
+            self.db = QSqlDatabase.database()
+            if not self.db.isOpen():
+                self.db = None
+        except Exception:
+            self.db = None
     
     def execute_query(self, sql: str, params: tuple = ()) -> QSqlQuery:
         """쿼리 실행"""
+        # 데이터베이스 연결이 없으면 빈 쿼리 반환
+        if self.db is None:
+            logger.warning("DB", "데이터베이스 연결 없음 - 쿼리 실행 실패")
+            return QSqlQuery()
+
         query = QSqlQuery(self.db)
         
         if params:
@@ -340,7 +351,7 @@ class IndicatorsRepository(BaseRepository):
             indicators.get('bb_lower')
         ))
     
-    def get_latest(self, exchange_id: str, symbol: str, 
+    def get_latest(self, exchange_id: str, symbol: str,
                   timeframe: str) -> Optional[Dict]:
         """최신 지표 조회"""
         sql = """
@@ -349,6 +360,29 @@ class IndicatorsRepository(BaseRepository):
         ORDER BY timestamp DESC LIMIT 1
         """
         return self.fetch_one(sql, (exchange_id, symbol, timeframe))
+
+    def get_indicators_by_timestamp_range(self, exchange_id: str, symbol: str,
+                                             timeframe: str, start_time: str,
+                                             end_time: str) -> List[Dict]:
+        """시간 범위로 지표 조회"""
+        conditions = ["exchange_id = ?", "symbol = ?", "timeframe = ?"]
+        params = [exchange_id, symbol, timeframe]
+
+        if start_time:
+            conditions.append("timestamp >= ?")
+            params.append(start_time)
+
+        if end_time:
+            conditions.append("timestamp <= ?")
+            params.append(end_time)
+
+        where_clause = " AND ".join(conditions)
+        sql = f"""
+        SELECT * FROM indicators
+        WHERE {where_clause}
+        ORDER BY timestamp DESC
+        """
+        return self.fetch_all(sql, tuple(params))
     
     def delete_old(self, days: int):
         """오래된 지표 삭제"""

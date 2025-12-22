@@ -91,7 +91,13 @@ class DataCollectorWorker(QObject):
             return
         
         logger.info("DataCollector", f"데이터 백필 시작: {ex_id}, {len(symbols)}개 심볼")
-        
+        print("="*60)
+        print(f"[WORKER] 데이터 백필 시작: {ex_id}, {len(symbols)}개 심볼")
+        print(f"[WORKER] 수집할 타임프레임: {TIMEFRAMES}")
+        print(f"[WORKER] 시작 날짜: {start_date}")
+        print(f"[WORKER] 전체 작업량: {len(symbols)}개 심볼 × {len(TIMEFRAMES)}개 타임프레임 = {len(symbols) * len(TIMEFRAMES)}개 작업")
+        print("="*60)
+
         total_tasks = len(symbols) * len(TIMEFRAMES)
         current_task = 0
         
@@ -102,6 +108,7 @@ class DataCollectorWorker(QObject):
                     break
                 
                 current_task += 1
+                print(f"[WORKER] ({current_task}/{total_tasks}) {ex_id} {symbol} {timeframe} 수집 시작...")
                 self.progress_updated.emit(
                     f"{ex_id} {symbol} {timeframe} 수집 시작",
                     current_task,
@@ -121,6 +128,9 @@ class DataCollectorWorker(QObject):
         
         self.is_running = False
         logger.info("DataCollector", "데이터 백필 완료")
+        print("="*60)
+        print(f"[WORKER] 데이터 백필 완료! {ex_id}")
+        print("="*60)
         self.collection_completed.emit()
     
     def _collect_candles(self, client: CCXTClient, exchange_id: str,
@@ -137,9 +147,13 @@ class DataCollectorWorker(QObject):
                 # 최신 데이터부터 수집
                 latest_dt = datetime.fromisoformat(latest_ts_str)
                 from_timestamp = time_helper.kst_to_timestamp(latest_dt)
+                logger.info("DataCollector",
+                           f"{exchange_id} {symbol} {timeframe} 최신 데이터부터: {latest_dt}")
             else:
                 # 시작 날짜부터 수집
                 from_timestamp = time_helper.kst_to_timestamp(start_date)
+                logger.info("DataCollector",
+                           f"{exchange_id} {symbol} {timeframe} {start_date}부터 수집 시작: {from_timestamp}")
             
             logger.debug("DataCollector", 
                         f"{exchange_id} {symbol} {timeframe} 수집 시작: {from_timestamp}")
@@ -155,22 +169,30 @@ class DataCollectorWorker(QObject):
         all_candles = []
         since_ms = from_timestamp
         page_count = 0
-        
+        consecutive_empty_pages = 0
+        max_empty_pages = 3  # 연속 3페이지가 비었으면 중단
+
+        # OKX 1분봉은 더 작은 limit 사용
+        limit = 300 if (exchange_id == "okx" and timeframe == "1m") else 1000
+
         while True:
             if not self.is_running:
                 logger.warning("DataCollector", f"{symbol} {timeframe} 수집 중단")
                 break
-            
+
             try:
+                logger.info("DataCollector",
+                           f"{symbol} {timeframe} API 요청: since={since_ms}, limit={limit}")
+
                 candles = client.get_candles(
                     symbol=symbol,
                     timeframe=timeframe,
                     since=since_ms,
-                    limit=1000
+                    limit=limit
                 )
-                
+
                 page_count += 1
-                
+
                 # UI 업데이트 (매 5페이지마다)
                 if total_tasks > 0 and page_count % 5 == 0:
                     self.progress_updated.emit(
@@ -178,25 +200,47 @@ class DataCollectorWorker(QObject):
                         current_task,
                         total_tasks
                     )
-                
-                logger.debug("DataCollector", 
-                            f"{symbol} {timeframe} 페이지 {page_count}: "
-                            f"{len(candles) if candles else 0}개 캔들")
-                            
+
+                logger.info("DataCollector",
+                           f"{symbol} {timeframe} 페이지 {page_count}: "
+                           f"{len(candles) if candles else 0}개 캔들")
+
             except Exception as e:
                 import traceback
-                logger.error("DataCollector", 
-                            f"{symbol} {timeframe} API 호출 실패: {str(e)}", 
+                logger.error("DataCollector",
+                            f"{symbol} {timeframe} API 호출 실패: {str(e)}",
                             traceback.format_exc())
                 break
-            
+
             if not candles:
-                logger.debug("DataCollector", 
-                           f"{symbol} {timeframe} 수집 완료 (더 이상 데이터 없음)")
-                break
+                consecutive_empty_pages += 1
+                logger.info("DataCollector",
+                           f"{symbol} {timeframe}: 빈 페이지 {consecutive_empty_pages}/{max_empty_pages}")
+
+                if consecutive_empty_pages >= max_empty_pages:
+                    logger.info("DataCollector",
+                               f"{symbol} {timeframe}: 연속 빈 페이지로 수집 완료")
+                    break
+                else:
+                    # 다음 시도를 위해 잠시 대기
+                    time.sleep(1)
+                    continue
+            else:
+                consecutive_empty_pages = 0  # 빈 페이지 초기화
             
-            # 캔들 변환 및 추가
+            # 캔들 변환 및 중복 확인
+            new_candles_count = 0
+            duplicate_count = 0
+
             for candle in candles:
+                # 중복 타임스탬프 확인 (방지책)
+                candle_timestamp = candle['timestamp']
+
+                # 이미 있는 타임스탬프면 건너뛰
+                if any(c['timestamp'] == candle_timestamp for c in all_candles):
+                    duplicate_count += 1
+                    continue
+
                 all_candles.append({
                     "exchange_id": exchange_id,
                     "symbol": symbol,
@@ -208,22 +252,75 @@ class DataCollectorWorker(QObject):
                     "close": candle['close'],
                     "volume": candle['volume']
                 })
-            
-            # 다음 페이지
-            if len(candles) < 1000:
+                new_candles_count += 1
+
+            if duplicate_count > 0:
+                logger.info("DataCollector",
+                           f"{symbol} {timeframe} 페이지 {page_count}: "
+                           f"{new_candles_count}개 신규, {duplicate_count}개 중복 스킵")
+
+            # 중간 저장 (10,000개 단위)
+            if len(all_candles) >= 10000:
+                try:
+                    # 진행률 업데이트 (페이지 50개마다 업데이트)
+                    if page_count % 50 == 0 or page_count < 10:
+                        saved_count = 10000
+                        self.progress_updated.emit(
+                            f"{exchange_id} {symbol} {timeframe} 수집 및 저장 중... (총 {page_count}페이지, {saved_count * (page_count // 50 + 1)}개 저장 완료)",
+                            current_task,
+                            total_tasks
+                        )
+
+                    self.candles_repo.insert_candles_batch(all_candles)
+                    logger.info("DataCollector",
+                               f"{symbol} {timeframe}: 중간 저장 {len(all_candles)}개 캔들")
+
+                    # 메모리 초기화
+                    all_candles = []
+
+                    # 짧은 대기로 DB 부하 완화
+                    time.sleep(0.5)
+
+                except Exception as e:
+                    logger.error("DataCollector",
+                               f"{symbol} {timeframe} 중간 저장 실패: {str(e)}")
+                    # 저장 실패해도 계속 진행 (메모리 초기화하여 중복 방지)
+                    all_candles = []
+                    break
+
+            # 다음 페이지 처리
+            # limit보다 적게 받았으면 마지막 페이지로 간주
+            if len(candles) < limit:
+                logger.info("DataCollector",
+                           f"{symbol} {timeframe}: 마지막 페이지 도달 ({len(candles)} < {limit})")
                 break
-            
-            # 마지막 캔들 시간 + 1ms
-            since_ms = candles[-1]['timestamp_ms'] + 1
-            time.sleep(0.1)  # Rate limit
+
+            # 다음 페이지 요청을 위한 시간 계산
+            if candles and len(candles) > 0:
+                # 마지막 캔들 시간 + 1ms (timestamp_ms 또는 timestamp)
+                if 'timestamp_ms' in candles[-1]:
+                    since_ms = candles[-1]['timestamp_ms'] + 1
+                elif 'timestamp' in candles[-1]:
+                    # timestamp는 밀리초 단위라고 가정
+                    since_ms = candles[-1]['timestamp'] + 1
+                else:
+                    # 기존 로직을 1분 증가
+                    since_ms += 60 * 1000
+
+                # 다음 요청까지의 대기 (레이트 리밋 준수)
+                if exchange_id == "okx" and timeframe == "1m":
+                    time.sleep(0.2)  # OKX 1분봉은 더 긴 대기
+                else:
+                    time.sleep(0.1)  # 기본 레이트 리밋
         
         # DB 저장
         if all_candles:
             try:
                 # DB 저장 중 표시
                 if total_tasks > 0:
+                    total_pages = page_count if page_count > 0 else 1
                     self.progress_updated.emit(
-                        f"{exchange_id} {symbol} {timeframe} 저장 중... ({len(all_candles)}개 캔들)",
+                        f"{exchange_id} {symbol} {timeframe} 최종 저장 중... (총 {total_pages}페이지, {len(all_candles)}개 캔들)",
                         current_task,
                         total_tasks
                     )
@@ -253,14 +350,17 @@ class DataCollectorWorker(QObject):
     def _calculate_and_save_indicators(self, exchange_id: str, 
                                        symbol: str, timeframe: str):
         """보조지표 계산 및 저장"""
-        # 최근 250개 캔들 조회 (MA200 + 여유)
+        # 최근 250개 캔들 조회
         candles = self.candles_repo.get_candles(
             exchange_id, symbol, timeframe, limit=250
         )
-        
-        if len(candles) < 200:
-            logger.warning("DataCollector", 
-                          f"{exchange_id} {symbol} {timeframe}: 지표 계산 불가 (캔들 부족)")
+
+        # 최소 개수 조정 (일봉은 7개만 있어도 계산 가능하도록)
+        min_required = 20 if timeframe == "1d" else 50
+
+        if len(candles) < min_required:
+            logger.warning("DataCollector",
+                          f"{exchange_id} {symbol} {timeframe}: 지표 계산 불가 (캔들 부족: {len(candles)}/{min_required})")
             return
         
         # 최신 캔들 기준으로 지표 계산
@@ -276,8 +376,14 @@ class DataCollectorWorker(QObject):
                 latest_candle['timestamp'],
                 indicators
             )
-            logger.debug("DataCollector", 
-                        f"{exchange_id} {symbol} {timeframe}: 지표 계산 완료")
+            logger.info("DataCollector",
+                       f"{exchange_id} {symbol} {timeframe}: 지표 계산 완료 - "
+                       f"MA20={indicators.get('ma_20', 'N/A')}, "
+                       f"RSI={indicators.get('rsi', 'N/A')}, "
+                       f"MACD={indicators.get('macd', 'N/A')}")
+        else:
+            logger.warning("DataCollector",
+                          f"{exchange_id} {symbol} {timeframe}: 지표 계산 실패 (결과 없음)")
     
     def realtime_update(self, exchange_id: str, symbols: List[str]):
         """실시간 데이터 업데이트 (주기적 호출)"""

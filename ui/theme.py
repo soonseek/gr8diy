@@ -1,38 +1,38 @@
 """
-Gr8 DIY - 커스텀 테마 시스템
+Gr8 DIY - Custom Theme System
 """
 
 class Gr8Theme:
-    """Gr8 DIY 커스텀 테마 색상 팔레트"""
-    
-    # === 배경색 ===
+    """Gr8 DIY custom theme color palette"""
+
+    # === Background Colors ===
     BG_DARK = "#0a0e27"
     BG_SECONDARY = "#1a1f3a"
     BG_TERTIARY = "#252b4a"
     BG_INPUT = "#1e2338"
-    
-    # === 네온 포인트 컬러 ===
+
+    # === Neon Point Colors ===
     NEON_GREEN = "#00ff9f"
     NEON_BLUE = "#00d4ff"
     NEON_PURPLE = "#b744ff"
-    
-    # === 그라디언트 ===
+
+    # === Gradients ===
     GRADIENT_PRIMARY = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00ff9f, stop:1 #00d4ff)"
     GRADIENT_HOVER = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00ffb3, stop:1 #00e0ff)"
     GRADIENT_PRESSED = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00cc7f, stop:1 #00a8cc)"
-    
-    # === 텍스트 색상 ===
+
+    # === Text Colors ===
     TEXT_PRIMARY = "#e8e8e8"
     TEXT_SECONDARY = "#a0a0a0"
     TEXT_DISABLED = "#606060"
     TEXT_ON_ACCENT = "#0a0e27"
-    
-    # === 보더/구분선 (밝게!) ===
+
+    # === Border/Separator (Bright!) ===
     BORDER_DEFAULT = "#6a7090"
     BORDER_FOCUS = "#00ff9f"
     BORDER_HOVER = "#00d4ff"
-    
-    # === 상태 색상 ===
+
+    # === Status Colors ===
     SUCCESS = "#00ff9f"
     WARNING = "#ffaa00"
     ERROR = "#ff4444"
@@ -40,7 +40,7 @@ class Gr8Theme:
 
 
 def get_custom_stylesheet():
-    """Gr8 DIY 커스텀 스타일시트 반환"""
+    """Return Gr8 DIY custom stylesheet"""
     
     return f"""
     /* ===== 전역 설정 ===== */
@@ -179,6 +179,42 @@ def get_custom_stylesheet():
         border-left: 6px solid transparent;
         border-right: 6px solid transparent;
         border-top: 8px solid {Gr8Theme.TEXT_ON_ACCENT};
+    }}
+
+    /* 드롭다운 목록 스타일 */
+    QComboBox QAbstractItemView {{
+        background-color: {Gr8Theme.BG_SECONDARY};
+        border: 2px solid {Gr8Theme.NEON_GREEN};
+        border-radius: 6px;
+        selection-background-color: {Gr8Theme.NEON_GREEN};
+        selection-color: {Gr8Theme.TEXT_ON_ACCENT};
+        color: {Gr8Theme.TEXT_PRIMARY};
+        font-size: 13px;
+        padding: 4px;
+        /* 가로 길이 제한 */
+        max-width: 400px;
+        min-width: 200px;
+        /* 위치 조정을 위한 설정 */
+        show-decoration-selected: 1;
+    }}
+
+    QComboBox QAbstractItemView::item {{
+        padding: 8px 12px;
+        margin: 1px 0;
+        border-radius: 4px;
+        height: 32px;
+        border: 1px solid transparent;
+    }}
+
+    QComboBox QAbstractItemView::item:hover {{
+        background: rgba(0, 255, 159, 0.1);
+        border-color: rgba(0, 255, 159, 0.3);
+    }}
+
+    QComboBox QAbstractItemView::item:selected {{
+        background: rgba(0, 255, 159, 0.2);
+        border: 1px solid {Gr8Theme.NEON_GREEN};
+        color: {Gr8Theme.NEON_GREEN};
     }}
     
     /* ===== DateEdit ===== */

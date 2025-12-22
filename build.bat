@@ -39,12 +39,15 @@ echo 빌드 시작...
     --hidden-import=numpy ^
     --hidden-import=pandas ^
     --hidden-import=markdown ^
+    --hidden-import=pyqtgraph ^
+    --hidden-import=pyqtgraph.graphicsItems ^
     --exclude-module=PyQt5 ^
     --exclude-module=PyQt6 ^
     --exclude-module=PySide2 ^
     --exclude-module=tkinter ^
-    --exclude-module=matplotlib ^
     --exclude-module=scipy ^
+    --exclude-module=matplotlib ^
+    --exclude-module=mplfinance ^
     --distpath "dist" ^
     --workpath "build" ^
     app\main.py

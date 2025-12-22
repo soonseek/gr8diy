@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(build.bat:*)",
+      "Bash(cmd:*)",
+      "Bash(python:*)",
+      "Bash(envScriptsactivate:*)",
+      "Bash(pip install:*)",
+      "Bash(pyinstaller:*)",
+      "Bash(find:*)",
+      "Bash(.\\env\\Scripts\\pip.exe install:*)",
+      "Bash(env/Scripts/pip.exe:*)",
+      "WebSearch",
+      "Bash(powershell -Command:*)",
+      "Bash(OKX Trading Bot - 메인 진입점)",
+      "Bash(\"\"\"\nimport sys\nimport os\nimport traceback\nfrom pathlib import Path\n\n# 프로젝트 루트를 sys.path에 추가\nproject_root = Path(__file__).parent.parent\nsys.path.insert(0, str(project_root))\n\n# Qt 플러그인 경로 설정 (QApplication 생성 전에 설정해야 함!)\ndef _setup_qt_plugin_path():\n    \"\"\"Qt 플러그인 경로를 Windows 환경에 맞게 설정\"\"\"\n    import importlib.util\n    \n    # PySide6 설치 경로 찾기\n    spec = importlib.util.find_spec(\"PySide6\")\n    if spec and spec.origin:\n        pyside6_path = Path(spec.origin).parent\n    else:\n        pyside6_path = project_root / \"env\" / \"Lib\" / \"site-packages\" / \"PySide6\"\n    \n    plugins_path = pyside6_path / \"plugins\"\n    platforms_path = plugins_path / \"platforms\"\n    \n    if not platforms_path.exists():\n        print(f\"[ERROR] Qt plugins path not found: {platforms_path}\")\n        return False\n    \n    # 환경 변수 설정\n    os.environ[\"QT_QPA_PLATFORM_PLUGIN_PATH\"] = str(platforms_path)\n    os.environ[\"QT_PLUGIN_PATH\"] = str(plugins_path)\n    \n    # Windows에서 DLL 검색 경로에 추가\n    if sys.platform == \"win32\":\n        # PATH에 PySide6 경로 추가\n        pyside6_str = str(pyside6_path)\n        current_path = os.environ.get(\"PATH\", \"\")\n        if pyside6_str not in current_path:\n            os.environ[\"PATH\"] = pyside6_str + os.pathsep + current_path\n        \n        # DLL 디렉토리 추가 (Python 3.8+)\n        if hasattr(os, \"add_dll_directory\"):\n            try:\n                os.add_dll_directory(pyside6_str)\n                os.add_dll_directory(str(platforms_path))\n            except Exception:\n                pass\n    \n    return True\n\ndef exception_hook(exctype, value, tb):\n    \"\"\"전역 예외 핸들러\"\"\"\n    if exctype == KeyboardInterrupt:\n        sys.__excepthook__(exctype, value, tb)\n        return\n    \n    error_msg = \"\".join(traceback.format_exception(exctype, value, tb))\n    print(f\"n[ERROR] Unhandled exception: {exctype.__name__}: {value}\")\n    print(f\"[ERROR] Traceback:n{error_msg}\")\n    \n    # 로거가 이미 초기화된 경우에만 로깅\n    try:\n        from utils.logger import logger\n        logger.error(\"System\", f\"Unhandled exception: {exctype.__name__}\", value)\n    except:\n        pass\n\ndef main():\n    \"\"\"메인 실행 함수\"\"\"\n    print(\"Gr8 DIY 시작\")\n    \n    # 전역 예외 핸들러 설치\n    sys.excepthook = exception_hook\n    \n    # High DPI 설정\n    # High DPI 지원 - QApplication 생성 전에 설정해야 함!\n    try:\n        from PySide6.QtCore import Qt, QApplication\n        from PySide6.QtWidgets import QApplication\n        QApplication.setHighDpiScaleFactorRoundingPolicy(\n            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough\n        )\n    except ImportError:\n        print(\"[ERROR] PySide6 not found. Please install with: pip install PySide6\")\n        return\n    \n    # QApplication 생성\n    app = QApplication(sys.argv)\n    \n    # Qt 플러그인 경로 추가 (SQL 드라이버 등을 위해)\n    from PySide6.QtCore import QCoreApplication\n    plugin_path = project_root / \"env\" / \"Lib\" / \"site-packages\" / \"PySide6\" / \"plugins\"\n    QCoreApplication.addLibraryPath(str(plugin_path))\n\n    # QApplication 이벤트 루프 초기화 (중요!)\n    app.processEvents()\n\n    # 테마 설정을 위해 qfluentwidgets를 이제 import (QApplication 생성 이후)\n    import PySide6\n    from PySide6 import QtCore\n    from qfluentwidgets import setTheme, Theme\n    # Fluent 다크 테마 설정 (Gr8 DIY 커스텀 테마는 MainWindow에서 적용)\n    setTheme(Theme.DARK)\n\n    # QApplication 생성 후 Qt 관련 모듈들 import\n    from utils.logger import logger\n\n    from database.schema import DatabaseSchema\n\n    from ui.main_window import MainWindow\n\n    # 데이터베이스 초기화\n    logger.info(\"Main\", \"데이터베이스 초기화 중...\")\n    if not DatabaseSchema.init_database(str(project_root / \"database\" / \"trading_bot.db\")):\n        logger.error(\"Main\", \"데이터베이스 초기화 실패\")\n        sys.exit(1)\n\n    # 메인 윈도우 생성\n    logger.info(\"Main\", \"메인 윈도우 생성 중...\")\n    window = MainWindow()\n    window.show()\n    \n    logger.info(\"Main\", \"애플리케이션 시작 완료\")\n    \n    sys.exit(app.exec())\n\n\nif __name__ == \"__main__\":\n    main()\n'' -Encoding UTF8\")",
+      "Bash(move:*)",
+      "Bash(env/Scripts/python.exe:*)",
+      "Bash(env\\Scripts\\python.exe:*)",
+      "Bash(envScriptspython.exe appmain.py)",
+      "Bash(echo:*)",
+      "Bash(timeout:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

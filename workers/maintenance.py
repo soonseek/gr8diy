@@ -1,5 +1,5 @@
 """
-유지보수 워커
+Maintenance Worker
 """
 import time
 from PySide6.QtCore import QObject, Signal
@@ -13,7 +13,7 @@ from config.settings import DATA_RETENTION_DAYS, LOG_RETENTION_DAYS
 
 
 class MaintenanceWorker(QObject):
-    """유지보수 워커 (주기적 데이터 정리)"""
+    """Maintenance Worker (Periodic data cleanup)"""
     
     # Signals
     cleanup_completed = Signal(str)  # message

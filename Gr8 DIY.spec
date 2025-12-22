@@ -1,34 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
-
-datas = []
-binaries = []
-hiddenimports = ['PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets', 'PySide6.QtSql', 'PySide6.QtNetwork', 'qfluentwidgets', 'qfluentwidgets.common', 'qfluentwidgets.components', 'cryptography', 'cryptography.fernet', 'requests', 'numpy', 'pandas', 'markdown']
-tmp_ret = collect_all('PySide6')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('qfluentwidgets')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-
-
-block_cipher = None
 
 
 a = Analysis(
     ['app\\main.py'],
     pathex=[],
-    binaries=binaries,
-    datas=datas,
-    hiddenimports=hiddenimports,
+    binaries=[],
+    datas=[('C:\\Users\\송민정\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PySide6\\plugins\\platforms', 'PySide6/plugins/platforms'), ('C:\\Users\\송민정\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PySide6\\plugins\\sqldrivers', 'PySide6/plugins/sqldrivers'), ('C:\\Users\\송민정\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PySide6\\plugins\\styles', 'PySide6/plugins/styles'), ('C:\\Users\\송민정\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PySide6\\plugins\\imageformats', 'PySide6/plugins/imageformats')],
+    hiddenimports=['PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets', 'PySide6.QtSql', 'PySide6.QtNetwork', 'qfluentwidgets', 'cryptography', 'cryptography.fernet', 'requests', 'numpy', 'pandas', 'markdown'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=['PyQt5', 'PyQt6', 'PySide2', 'tkinter', 'matplotlib', 'scipy'],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
     noarchive=False,
+    optimize=0,
 )
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
@@ -50,7 +36,6 @@ exe = EXE(
 coll = COLLECT(
     exe,
     a.binaries,
-    a.zipfiles,
     a.datas,
     strip=False,
     upx=True,

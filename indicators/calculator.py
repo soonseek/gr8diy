@@ -3,135 +3,206 @@
 """
 import pandas as pd
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List, Optional, Union
+import talib
 from config.settings import INDICATOR_PARAMS
+from utils.logger import logger
 
 
 class IndicatorCalculator:
     """기술적 지표 계산"""
-    
-    @staticmethod
-    def calculate_ma(prices: pd.Series, period: int) -> pd.Series:
-        """이동평균선 (MA)"""
-        return prices.rolling(window=period).mean()
-    
-    @staticmethod
-    def calculate_macd(prices: pd.Series, 
-                      fast: int = 12, slow: int = 26, signal: int = 9) -> Dict:
-        """MACD"""
-        exp1 = prices.ewm(span=fast, adjust=False).mean()
-        exp2 = prices.ewm(span=slow, adjust=False).mean()
-        macd = exp1 - exp2
-        signal_line = macd.ewm(span=signal, adjust=False).mean()
-        histogram = macd - signal_line
-        
-        return {
-            "macd": macd.iloc[-1] if len(macd) > 0 else None,
-            "signal": signal_line.iloc[-1] if len(signal_line) > 0 else None,
-            "histogram": histogram.iloc[-1] if len(histogram) > 0 else None
-        }
-    
-    @staticmethod
-    def calculate_rsi(prices: pd.Series, period: int = 14) -> float:
-        """RSI (Relative Strength Index)"""
-        delta = prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-        
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        
-        return rsi.iloc[-1] if len(rsi) > 0 else None
-    
-    @staticmethod
-    def calculate_stochastic(high: pd.Series, low: pd.Series, close: pd.Series,
-                            k_period: int = 14, d_period: int = 3) -> Dict:
-        """Stochastic Oscillator"""
-        lowest_low = low.rolling(window=k_period).min()
-        highest_high = high.rolling(window=k_period).max()
-        
-        k = 100 * ((close - lowest_low) / (highest_high - lowest_low))
-        d = k.rolling(window=d_period).mean()
-        
-        return {
-            "k": k.iloc[-1] if len(k) > 0 else None,
-            "d": d.iloc[-1] if len(d) > 0 else None
-        }
-    
-    @staticmethod
-    def calculate_bollinger_bands(prices: pd.Series, 
-                                 period: int = 20, std_dev: float = 2) -> Dict:
-        """Bollinger Bands"""
-        middle = prices.rolling(window=period).mean()
-        std = prices.rolling(window=period).std()
-        
-        upper = middle + (std * std_dev)
-        lower = middle - (std * std_dev)
-        
-        return {
-            "upper": upper.iloc[-1] if len(upper) > 0 else None,
-            "middle": middle.iloc[-1] if len(middle) > 0 else None,
-            "lower": lower.iloc[-1] if len(lower) > 0 else None
-        }
-    
-    @staticmethod
-    def calculate_all_indicators(candles: List[Dict]) -> Dict:
-        """
-        모든 지표 계산
-        
-        candles: [{"open": ..., "high": ..., "low": ..., "close": ..., "volume": ...}, ...]
-        """
-        if not candles or len(candles) < 200:  # 최소 200개 필요 (MA200)
-            return {}
-        
-        # DataFrame 변환
-        df = pd.DataFrame(candles)
-        df['close'] = df['close'].astype(float)
-        df['high'] = df['high'].astype(float)
-        df['low'] = df['low'].astype(float)
-        
-        # 이동평균선
+
+    def __init__(self):
+        self.params = INDICATOR_PARAMS
+
+    def calculate_all_indicators(self, df: pd.DataFrame) -> Dict[str, any]:
+        """모든 보조지표 계산"""
         indicators = {}
-        for period in INDICATOR_PARAMS['MA']:
-            ma = IndicatorCalculator.calculate_ma(df['close'], period)
-            indicators[f'ma_{period}'] = ma.iloc[-1] if len(ma) > 0 else None
-        
-        # MACD
-        macd_params = INDICATOR_PARAMS['MACD']
-        macd_result = IndicatorCalculator.calculate_macd(
-            df['close'],
-            macd_params['fast'],
-            macd_params['slow'],
-            macd_params['signal']
-        )
-        indicators['macd'] = macd_result['macd']
-        indicators['macd_signal'] = macd_result['signal']
-        indicators['macd_hist'] = macd_result['histogram']
-        
-        # RSI
-        rsi_period = INDICATOR_PARAMS['RSI']['period']
-        indicators['rsi'] = IndicatorCalculator.calculate_rsi(df['close'], rsi_period)
-        
-        # Stochastic
-        stoch_params = INDICATOR_PARAMS['STOCH']
-        stoch_result = IndicatorCalculator.calculate_stochastic(
-            df['high'], df['low'], df['close'],
-            stoch_params['k_period'], stoch_params['d_period']
-        )
-        indicators['stoch_k'] = stoch_result['k']
-        indicators['stoch_d'] = stoch_result['d']
-        
-        # Bollinger Bands
-        bb_params = INDICATOR_PARAMS['BOLLINGER']
-        bb_result = IndicatorCalculator.calculate_bollinger_bands(
-            df['close'],
-            bb_params['period'],
-            bb_params['std_dev']
-        )
-        indicators['bb_upper'] = bb_result['upper']
-        indicators['bb_middle'] = bb_result['middle']
-        indicators['bb_lower'] = bb_result['lower']
-        
+
+        try:
+            # 가격 데이터 추출
+            close = df['close']
+            high = df['high']
+            low = df['low']
+            volume = df['volume']
+
+            # 이동평균선 (MA)
+            indicators['MA'] = self.calculate_ma(close)
+
+            # MACD
+            indicators['MACD'] = self.calculate_macd(close)
+
+            # RSI
+            indicators['RSI'] = self.calculate_rsi(close)
+
+            # Stochastic
+            indicators['STOCH'] = self.calculate_stochastic(high, low, close)
+
+            # Bollinger Bands
+            indicators['BOLLINGER'] = self.calculate_bollinger_bands(close)
+
+            # 추가 지표들
+            indicators['EMA'] = self.calculate_ema(close)
+            indicators['ATR'] = self.calculate_atr(high, low, close)
+            indicators['OBV'] = self.calculate_obv(close, volume)
+            indicators['WILLIAMS_R'] = self.calculate_williams_r(high, low, close)
+            indicators['CCI'] = self.calculate_cci(high, low, close)
+            indicators['MFI'] = self.calculate_mfi(high, low, close, volume)
+
+            logger.debug("IndicatorCalculator", f"보조지표 계산 완료: {len(indicators)}개")
+
+        except Exception as e:
+            logger.error("IndicatorCalculator", f"보조지표 계산 실패: {str(e)}")
+
         return indicators
 
+    def calculate_ma(self, close: pd.Series, periods: List[int] = None) -> Dict[str, float]:
+        """이동평균선 (MA)"""
+        if periods is None:
+            periods = self.params["MA"]
 
+        result = {}
+        for period in periods:
+            try:
+                ma_values = talib.SMA(close.values, timeperiod=period)
+                result[f'MA_{period}'] = float(ma_values[-1]) if not np.isnan(ma_values[-1]) else None
+            except Exception as e:
+                logger.warning("IndicatorCalculator", f"MA_{period} 계산 실패: {str(e)}")
+                result[f'MA_{period}'] = None
+
+        return result
+
+    def calculate_ema(self, close: pd.Series, periods: List[int] = None) -> Dict[str, float]:
+        """지수 이동평균선 (EMA)"""
+        if periods is None:
+            periods = [12, 26, 50]  # 기본값
+
+        result = {}
+        for period in periods:
+            try:
+                ema_values = talib.EMA(close.values, timeperiod=period)
+                result[f'EMA_{period}'] = float(ema_values[-1]) if not np.isnan(ema_values[-1]) else None
+            except Exception as e:
+                logger.warning("IndicatorCalculator", f"EMA_{period} 계산 실패: {str(e)}")
+                result[f'EMA_{period}'] = None
+
+        return result
+
+    def calculate_macd(self, close: pd.Series, params: Dict = None) -> Dict[str, float]:
+        """MACD"""
+        if params is None:
+            params = self.params["MACD"]
+
+        try:
+            fast = params["fast"]
+            slow = params["slow"]
+            signal = params["signal"]
+
+            macd, signal_line, histogram = talib.MACD(close.values, fastperiod=fast, slowperiod=slow, signalperiod=signal)
+
+            return {
+                "MACD": float(macd[-1]) if not np.isnan(macd[-1]) else None,
+                "MACD_Signal": float(signal_line[-1]) if not np.isnan(signal_line[-1]) else None,
+                "MACD_Histogram": float(histogram[-1]) if not np.isnan(histogram[-1]) else None
+            }
+        except Exception as e:
+            logger.warning("IndicatorCalculator", f"MACD 계산 실패: {str(e)}")
+            return {"MACD": None, "MACD_Signal": None, "MACD_Histogram": None}
+
+    def calculate_rsi(self, close: pd.Series, period: int = None) -> Optional[float]:
+        """RSI (Relative Strength Index)"""
+        if period is None:
+            period = self.params["RSI"]["period"]
+
+        try:
+            rsi_values = talib.RSI(close.values, timeperiod=period)
+            return float(rsi_values[-1]) if not np.isnan(rsi_values[-1]) else None
+        except Exception as e:
+            logger.warning("IndicatorCalculator", f"RSI 계산 실패: {str(e)}")
+            return None
+
+    def calculate_stochastic(self, high: pd.Series, low: pd.Series, close: pd.Series, params: Dict = None) -> Dict[str, float]:
+        """Stochastic Oscillator"""
+        if params is None:
+            params = self.params["STOCH"]
+
+        try:
+            k_period = params["k_period"]
+            d_period = params["d_period"]
+
+            slowk, slowd = talib.STOCH(high.values, low.values, close.values,
+                                      fastk_period=k_period, slowk_period=params.get("smooth", 3),
+                                      slowd_period=d_period)
+
+            return {
+                "STOCH_K": float(slowk[-1]) if not np.isnan(slowk[-1]) else None,
+                "STOCH_D": float(slowd[-1]) if not np.isnan(slowd[-1]) else None
+            }
+        except Exception as e:
+            logger.warning("IndicatorCalculator", f"Stochastic 계산 실패: {str(e)}")
+            return {"STOCH_K": None, "STOCH_D": None}
+
+    def calculate_bollinger_bands(self, close: pd.Series, params: Dict = None) -> Dict[str, float]:
+        """볼린저 밴드"""
+        if params is None:
+            params = self.params["BOLLINGER"]
+
+        try:
+            period = params["period"]
+            std_dev = params["std_dev"]
+
+            upper, middle, lower = talib.BBANDS(close.values, timeperiod=period, nbdevup=std_dev, nbdevdn=std_dev)
+
+            return {
+                "BB_Upper": float(upper[-1]) if not np.isnan(upper[-1]) else None,
+                "BB_Middle": float(middle[-1]) if not np.isnan(middle[-1]) else None,
+                "BB_Lower": float(lower[-1]) if not np.isnan(lower[-1]) else None
+            }
+        except Exception as e:
+            logger.warning("IndicatorCalculator", f"볼린저 밴드 계산 실패: {str(e)}")
+            return {"BB_Upper": None, "BB_Middle": None, "BB_Lower": None}
+
+    def calculate_atr(self, high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> Optional[float]:
+        """ATR (Average True Range)"""
+        try:
+            atr_values = talib.ATR(high.values, low.values, close.values, timeperiod=period)
+            return float(atr_values[-1]) if not np.isnan(atr_values[-1]) else None
+        except Exception as e:
+            logger.warning("IndicatorCalculator", f"ATR 계산 실패: {str(e)}")
+            return None
+
+    def calculate_obv(self, close: pd.Series, volume: pd.Series) -> Optional[float]:
+        """OBV (On Balance Volume)"""
+        try:
+            obv_values = talib.OBV(close.values, volume.values)
+            return float(obv_values[-1]) if not np.isnan(obv_values[-1]) else None
+        except Exception as e:
+            logger.warning("IndicatorCalculator", f"OBV 계산 실패: {str(e)}")
+            return None
+
+    def calculate_williams_r(self, high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> Optional[float]:
+        """Williams %R"""
+        try:
+            wr_values = talib.WILLR(high.values, low.values, close.values, timeperiod=period)
+            return float(wr_values[-1]) if not np.isnan(wr_values[-1]) else None
+        except Exception as e:
+            logger.warning("IndicatorCalculator", f"Williams %R 계산 실패: {str(e)}")
+            return None
+
+    def calculate_cci(self, high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> Optional[float]:
+        """CCI (Commodity Channel Index)"""
+        try:
+            cci_values = talib.CCI(high.values, low.values, close.values, timeperiod=period)
+            return float(cci_values[-1]) if not np.isnan(cci_values[-1]) else None
+        except Exception as e:
+            logger.warning("IndicatorCalculator", f"CCI 계산 실패: {str(e)}")
+            return None
+
+    def calculate_mfi(self, high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 14) -> Optional[float]:
+        """MFI (Money Flow Index)"""
+        try:
+            mfi_values = talib.MFI(high.values, low.values, close.values, volume.values, timeperiod=period)
+            return float(mfi_values[-1]) if not np.isnan(mfi_values[-1]) else None
+        except Exception as e:
+            logger.warning("IndicatorCalculator", f"MFI 계산 실패: {str(e)}")
+            return None

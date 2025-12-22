@@ -30,7 +30,7 @@ echo [INFO] Starting application...
 echo.
 echo ========================================
 echo.
-python app\main.py
+env\Scripts\python.exe app\main.py
 
 REM 종료 처리
 echo.

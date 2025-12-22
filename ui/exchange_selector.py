@@ -1,6 +1,6 @@
 """
-거래소 선택 위젯
-검색 가능한 드롭다운 + 일관된 인터페이스 제공
+Exchange Selector Widget
+Searchable dropdown + consistent interface
 """
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QCompleter, QListView
@@ -17,19 +17,19 @@ from config.exchanges import (
 
 
 class ExchangeSelector(QWidget):
-    """검색 가능한 거래소 선택 위젯"""
-    
-    # 거래소 변경 시그널
+    """Searchable exchange selector widget"""
+
+    # Exchange change signal
     exchange_changed = Signal(str)  # exchange_id
-    
-    def __init__(self, show_label: bool = True, label_text: str = "거래소:",
+
+    def __init__(self, show_label: bool = True, label_text: str = "Exchange:",
                  show_testnet_only: bool = False, default_exchange: str = None):
         """
         Args:
-            show_label: 레이블 표시 여부
-            label_text: 레이블 텍스트
-            show_testnet_only: 테스트넷 지원 거래소만 표시
-            default_exchange: 기본 선택 거래소 (None이면 DEFAULT_EXCHANGE_ID)
+            show_label: Whether to show label
+            label_text: Label text
+            show_testnet_only: Show only testnet supported exchanges
+            default_exchange: Default selected exchange (None for DEFAULT_EXCHANGE_ID)
         """
         super().__init__()
         
@@ -39,11 +39,11 @@ class ExchangeSelector(QWidget):
         self._init_ui(show_label, label_text)
         self._setup_exchanges()
         
-        # 기본 거래소 선택
+        # Select default exchange
         self._select_exchange(self._current_exchange_id)
-    
+
     def _init_ui(self, show_label: bool, label_text: str):
-        """UI 초기화"""
+        """Initialize UI"""
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
@@ -53,21 +53,55 @@ class ExchangeSelector(QWidget):
             label.setFixedWidth(80)
             layout.addWidget(label)
         
-        # 검색 + 콤보박스 컨테이너
+        # Search + combo box container
         combo_container = QVBoxLayout()
         combo_container.setSpacing(5)
-        
-        # 검색 입력
+
+        # Search input
         self.search_edit = SearchLineEdit()
-        self.search_edit.setPlaceholderText("거래소 검색...")
+        self.search_edit.setPlaceholderText("Search exchanges...")
         self.search_edit.setFixedHeight(36)
         self.search_edit.textChanged.connect(self._on_search_changed)
         combo_container.addWidget(self.search_edit)
-        
-        # 콤보박스
+
+        # Combo box
         self.combo = ComboBox()
         self.combo.setFixedHeight(36)
+        self.combo.setMinimumWidth(300)
+        self.combo.setMaximumWidth(400)
         self.combo.currentIndexChanged.connect(self._on_combo_changed)
+
+        # Exchange selection dropdown style (theme-based + width limit)
+        from ui.theme import get_custom_stylesheet
+        base_style = get_custom_stylesheet()
+
+        # Apply base theme style
+        self.combo.setStyleSheet(base_style)
+
+        # Additional style for exchange selection (width limit)
+        additional_style = """
+            QComboBox {
+                max-width: 380px;
+                min-width: 280px;
+            }
+            QComboBox QAbstractItemView {
+                max-width: 380px !important;
+                min-width: 280px !important;
+                /* Height adjustment for long exchange names */
+                min-height: 200px;
+                max-height: 300px;
+            }
+            QComboBox QAbstractItemView::item {
+                /* Allow word wrap for long text */
+                word-wrap: break-word;
+                white-space: pre-wrap;
+            }
+        """
+
+        # 스타일 병합
+        current_style = self.combo.styleSheet()
+        self.combo.setStyleSheet(current_style + additional_style)
+
         combo_container.addWidget(self.combo)
         
         layout.addLayout(combo_container)
